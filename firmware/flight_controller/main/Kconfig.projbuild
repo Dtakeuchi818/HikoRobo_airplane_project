@@ -1,0 +1,16 @@
+menu "HikoRobo Wi-Fi settings"
+
+    config HIKOROBO_WIFI_SSID
+        string "Ubuntu hotspot SSID (2.4 GHz)"
+        default "HikoRobo_Lab"
+        help
+            SSID of the Ubuntu NetworkManager hotspot. Max 31 ASCII bytes in this demo.
+
+    config HIKOROBO_WIFI_PASSWORD
+        string "Ubuntu hotspot Wi-Fi password (8-63 characters)"
+        default ""
+        help
+            Stored in the local sdkconfig and embedded in the firmware binary.
+            DO NOT commit sdkconfig or share the built firmware publicly.
+
+endmenu

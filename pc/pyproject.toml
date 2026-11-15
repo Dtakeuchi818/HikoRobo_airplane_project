@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hikorobo-gcs"
-version = "0.1.0"
+version = "0.2.0"
 description = "HikoRobo ground-control serial communication test"
 requires-python = ">=3.10"
 dependencies = ["pyserial>=3.5,<4"]
 
 [project.scripts]
 hikorobo-serial = "hikorobo_gcs.serial_cli:main"
+hikorobo-udp = "hikorobo_gcs.udp_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

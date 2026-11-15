@@ -14,9 +14,17 @@ static void check(const char *command, const char *expected)
     }
 }
 
+static void mock_wifi_status(char *reply, size_t capacity)
+{
+    snprintf(reply, capacity, "OK WIFI CONNECTED IP=10.42.0.23");
+}
+
 int main(void)
 {
     check("PING", "OK PONG");
+    check("GET_WIFI", "ERR WIFI_UNAVAILABLE");
+    command_protocol_set_wifi_status_provider(mock_wifi_status);
+    check("GET_WIFI", "OK WIFI CONNECTED IP=10.42.0.23");
     check("GET_RATE", "OK RATE 100");
     check("SET_RATE 250", "OK RATE 250");
     check("GET_STATUS", "OK STATUS READY RATE=250");

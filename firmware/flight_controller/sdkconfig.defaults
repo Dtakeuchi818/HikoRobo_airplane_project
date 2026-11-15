@@ -1,5 +1,7 @@
 CONFIG_IDF_TARGET="esp32s3"
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
-# Reserve USB Serial/JTAG for the command protocol, not stdout/log output.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+# USB Serial/JTAG is reserved for our command protocol, not stdout.
 CONFIG_ESP_CONSOLE_NONE=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y

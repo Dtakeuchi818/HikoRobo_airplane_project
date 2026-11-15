@@ -2,11 +2,18 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
 // Test-only parameter: not connected to a sensor yet; resets on reboot.
-static int s_rate_hz = 100;
+static atomic_int s_rate_hz = ATOMIC_VAR_INIT(100);
+static command_wifi_status_provider_t s_wifi_provider;
+
+void command_protocol_set_wifi_status_provider(command_wifi_status_provider_t provider)
+{
+    s_wifi_provider = provider;
+}
 
 void command_protocol_handle(const char *command, char *response, size_t response_size)
 {
@@ -22,11 +29,17 @@ void command_protocol_handle(const char *command, char *response, size_t respons
     if (strcmp(command, "PING") == 0) {
         snprintf(response, response_size, "OK PONG");
     } else if (strcmp(command, "GET_STATUS") == 0) {
-        snprintf(response, response_size, "OK STATUS READY RATE=%d", s_rate_hz);
+        snprintf(response, response_size, "OK STATUS READY RATE=%d", atomic_load(&s_rate_hz));
     } else if (strcmp(command, "GET_RATE") == 0) {
-        snprintf(response, response_size, "OK RATE %d", s_rate_hz);
+        snprintf(response, response_size, "OK RATE %d", atomic_load(&s_rate_hz));
     } else if (strcmp(command, "HELP") == 0) {
-        snprintf(response, response_size, "OK COMMANDS PING GET_STATUS GET_RATE SET_RATE HELP");
+        snprintf(response, response_size, "OK COMMANDS PING GET_STATUS GET_RATE SET_RATE GET_WIFI HELP");
+    } else if (strcmp(command, "GET_WIFI") == 0) {
+        if (s_wifi_provider != NULL) {
+            s_wifi_provider(response, response_size);
+        } else {
+            snprintf(response, response_size, "ERR WIFI_UNAVAILABLE");
+        }
     } else if (strncmp(command, "SET_RATE", 8) == 0) {
         if (command[8] != ' ') {
             snprintf(response, response_size, "ERR BAD_ARGUMENT");
@@ -51,8 +64,8 @@ void command_protocol_handle(const char *command, char *response, size_t respons
             snprintf(response, response_size, "ERR RATE_RANGE");
             return;
         }
-        s_rate_hz = (int)value;
-        snprintf(response, response_size, "OK RATE %d", s_rate_hz);
+        atomic_store(&s_rate_hz, (int)value);
+        snprintf(response, response_size, "OK RATE %d", atomic_load(&s_rate_hz));
     } else {
         snprintf(response, response_size, "ERR UNKNOWN_COMMAND");
     }
