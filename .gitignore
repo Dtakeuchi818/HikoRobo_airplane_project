@@ -1,0 +1,30 @@
+# ESP-IDF
+firmware/**/build/
+firmware/**/sdkconfig
+firmware/**/sdkconfig.old
+firmware/**/managed_components/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Docker / local environment
+.env
+.env.*
+!.env.example
+
+# Experiment data
+data/raw/
+data/processed/
+
+# KiCad temporary files
+*.kicad_prl
+*-backups/
+_autosave_*
+
+# OS
+.DS_Store
+Thumbs.db
