@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: hikorobo-gcs
+Version: 0.1.0
+Summary: HikoRobo ground-control serial communication test
+Requires-Python: >=3.10
+Requires-Dist: pyserial<4,>=3.5

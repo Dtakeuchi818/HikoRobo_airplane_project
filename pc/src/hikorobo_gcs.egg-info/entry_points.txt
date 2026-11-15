@@ -1,0 +1,2 @@
+[console_scripts]
+hikorobo-serial = hikorobo_gcs.serial_cli:main

@@ -1,18 +1,7 @@
-#include <stdio.h>
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-
+#include "usb_transport.h"
 
 void app_main(void)
 {
-    printf("ESP32-S3 Started!\n");
-
-    while(1)
-    {
-        printf("Hello World\n");
-        fflush(stdout);
-
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
+    // Blocking event loop. USB input is received in this FreeRTOS main task.
+    usb_transport_run();
 }

@@ -2,6 +2,5 @@ services:
   idf:
     devices:
       - "${ESP_PORT}:${ESP_PORT}"
-
     group_add:
       - "${DIALOUT_GID}"

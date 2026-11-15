@@ -1,17 +1,12 @@
 services:
   idf:
     image: espressif/idf:v6.1.1
-
     working_dir: /project
-
     user: "${LOCAL_UID}:${LOCAL_GID}"
-
     environment:
       HOME: /tmp
       IDF_GIT_SAFE_DIR: /project
-    
     volumes:
-      - ./firmware/flight_controller:/project 
-    
+      - ./firmware/flight_controller:/project
     stdin_open: true
     tty: true

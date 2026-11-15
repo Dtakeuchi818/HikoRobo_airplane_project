@@ -1,0 +1,10 @@
+pyproject.toml
+src/hikorobo_gcs/__init__.py
+src/hikorobo_gcs/serial_cli.py
+src/hikorobo_gcs.egg-info/PKG-INFO
+src/hikorobo_gcs.egg-info/SOURCES.txt
+src/hikorobo_gcs.egg-info/dependency_links.txt
+src/hikorobo_gcs.egg-info/entry_points.txt
+src/hikorobo_gcs.egg-info/requires.txt
+src/hikorobo_gcs.egg-info/top_level.txt
+tests/test_cli.py
