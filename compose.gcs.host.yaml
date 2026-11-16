@@ -1,0 +1,21 @@
+services:
+  gcs:
+    build:
+      context: ./pc
+      dockerfile: Dockerfile.gcs
+
+    network_mode: host
+
+    volumes:
+      - ./pc/src:/app/src:ro
+
+    command:
+      - uvicorn
+      - hikorobo_gcs.server.app:app
+      - --host
+      - 127.0.0.1
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /app/src
