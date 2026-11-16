@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>HikoRobo GCS</title>
+  <link rel="stylesheet" href="/static/style.css?v=3">
+  <script src="/static/app.js?v=3" defer></script>
+</head>
+<body>
+  <main class="container">
+    <header class="masthead">
+      <div>
+        <div class="eyebrow">GROUND CONTROL STATION / DEVELOPMENT</div>
+        <h1>HikoRobo <span>GCS</span></h1>
+        <p class="subtitle">XIAO ESP32S3 Plus — UDP Command Console</p>
+      </div>
+      <div class="status" id="link-status" role="status" aria-live="polite"><span class="dot"></span><span id="status-label">未確認</span></div>
+    </header>
+
+    <section class="card" aria-labelledby="connection-title">
+      <div class="section-head"><h2 id="connection-title">通信先設定</h2><span class="hint">Ubuntu AP / GL.iNet に対応</span></div>
+      <div class="fields">
+        <label for="host">XIAO IPアドレス
+          <input id="host" value="10.42.0.162" placeholder="10.42.0.162" autocomplete="off" spellcheck="false" required>
+        </label>
+        <label for="port">UDPポート
+          <input id="port" type="number" min="1" max="65535" step="1" value="5005" required>
+        </label>
+        <label for="timeout">タイムアウト [秒]
+          <input id="timeout" type="number" min="0.1" max="10" step="0.1" value="1.0" required>
+        </label>
+      </div>
+      <p class="note">Ubuntu APの例：10.42.0.x、GL.iNetルーターの例：192.168.8.x。入力内容はこのブラウザに保存されます。</p>
+    </section>
+
+    <section class="card" aria-labelledby="command-title">
+      <div class="section-head"><h2 id="command-title">コマンド実行</h2><span class="hint">XIAO側UDP 5005番</span></div>
+      <div class="commands">
+        <button class="primary" type="button" data-command="PING">PING</button>
+        <button type="button" data-command="GET_STATUS">GET_STATUS</button>
+        <button type="button" data-command="GET_WIFI">GET_WIFI</button>
+        <button type="button" data-command="GET_RATE">GET_RATE</button>
+      </div>
+      <div class="rate-control">
+        <div><label for="rate">テスト用 RATE <span class="muted">（1〜500）</span></label>
+          <input id="rate" type="number" min="1" max="500" step="1" value="100" required></div>
+        <button type="button" id="set-rate">SET_RATE</button>
+      </div>
+      <p class="note">RATEは現段階ではXIAO内部のテスト変数です。IMUのサンプリング周波数やストリーム送信周期には連動していません。</p>
+    </section>
+
+    <section class="card results" aria-labelledby="result-title">
+      <div class="section-head"><h2 id="result-title">直近の応答</h2><span class="hint" id="rtt">RTT: —</span></div>
+      <div id="latest-result" class="latest" role="status" aria-live="polite">コマンドを実行してください。</div>
+    </section>
+
+    <section class="card" aria-labelledby="logs-title">
+      <div class="section-head"><h2 id="logs-title">通信ログ</h2><button type="button" class="subtle" id="clear-log">クリア</button></div>
+      <div class="log" id="log" role="log" aria-live="polite" aria-relevant="additions text"></div>
+      <p class="note">表示ログは最大200行です。GUIを再読み込みするとログ表示は初期化されます。</p>
+    </section>
+
+    <footer>HikoRobo GCS · <a href="/docs" target="_blank" rel="noopener">FastAPI Docs</a> · <a href="/api/health" target="_blank" rel="noopener">Health</a></footer>
+  </main>
+</body>
+</html>

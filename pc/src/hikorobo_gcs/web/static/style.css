@@ -1,0 +1,300 @@
+:root {
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  color:#192739;
+  background:#f3f6fb;
+  font-synthesis:none
+}
+
+* {
+  box-sizing:border-box
+}
+
+body {
+  margin:0
+}
+
+button,input {
+  font:inherit
+}
+
+.container {
+  max-width:1040px;
+  margin:0 auto;
+  padding:36px 22px 64px
+}
+
+.masthead {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:18px;
+  margin-bottom:24px
+}
+
+.eyebrow {
+  font-size:11px;
+  font-weight:750;
+  letter-spacing:.12em;
+  color:#42729e
+}
+
+h1 {
+  margin:5px 0 4px;
+  font-size:32px;
+  letter-spacing:-.055em
+}
+
+h1 span {
+  color:#2c77bd
+}
+
+.subtitle,.hint,.note,.muted {
+  color:#65778c
+}
+
+.subtitle {
+  font-size:14px;
+  margin:0
+}
+
+.card {
+  background:#fff;
+  border:1px solid #e0e7f1;
+  border-radius:15px;
+  padding:23px 25px;
+  margin:15px 0;
+  box-shadow:0 3px 18px rgba(25,42,65,.035)
+}
+
+.section-head {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:17px
+}
+
+h2 {
+  font-size:17px;
+  letter-spacing:-.015em;
+  margin:0
+}
+
+.hint {
+  font-size:12px
+}
+
+.fields {
+  display:grid;
+  grid-template-columns:2fr 1fr 1fr;
+  gap:14px
+}
+
+label {
+  display:block;
+  font-size:13px;
+  font-weight:650
+}
+
+input {
+  display:block;
+  width:100%;
+  margin-top:7px;
+  border:1px solid #cbd7e5;
+  border-radius:9px;
+  padding:12px;
+  background:#fff;
+  color:#152739;
+  outline:none
+}
+
+input:focus {
+  border-color:#357fc0;
+  box-shadow:0 0 0 3px rgba(53,127,192,.12)
+}
+
+.note {
+  font-size:12px;
+  line-height:1.65;
+  margin:12px 0 0
+}
+
+.commands {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px
+}
+
+button {
+  cursor:pointer;
+  border:1px solid #cbd7e5;
+  background:#fff;
+  color:#23415e;
+  border-radius:9px;
+  font-weight:700;
+  padding:12px 14px;
+  transition:background .12s
+}
+
+button:hover:not(:disabled) {
+  background:#edf5fc
+}
+
+button:disabled {
+  opacity:.55;
+  cursor:progress
+}
+
+.primary {
+  background:#1c70b2;
+  color:#fff;
+  border-color:#1c70b2
+}
+
+.primary:hover:not(:disabled) {
+  background:#155b93
+}
+
+.rate-control {
+  margin-top:17px;
+  display:flex;
+  align-items:end;
+  gap:10px
+}
+
+.rate-control>div {
+  max-width:220px
+}
+
+.rate-control button {
+  background:#eaf2fa
+}
+
+.muted {
+  font-size:12px;
+  font-weight:400
+}
+
+.status {
+  display:flex;
+  gap:8px;
+  align-items:center;
+  padding:9px 13px;
+  border:1px solid #cbd7e5;
+  border-radius:99px;
+  background:#fff;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap
+}
+
+.dot {
+  width:9px;
+  height:9px;
+  border-radius:99px;
+  background:#8b9caf
+}
+
+.status.good .dot {
+  background:#24a174
+}
+
+.status.bad .dot {
+  background:#d66f61
+}
+
+.latest {
+  border-radius:9px;
+  border:1px solid #d9e4ef;
+  background:#f7fafc;
+  padding:16px;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:14px;
+  white-space:pre-wrap;
+  word-break:break-word;
+  min-height:62px
+}
+
+.latest.error {
+  border-color:#f2c5bd;
+  background:#fff7f5;
+  color:#933a33
+}
+
+.log {
+  background:#101c2a;
+  color:#e1edfa;
+  border-radius:10px;
+  min-height:148px;
+  max-height:310px;
+  overflow:auto;
+  padding:14px 16px;
+  font:12px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace
+}
+
+.log-line {
+  white-space:pre-wrap;
+  overflow-wrap:anywhere
+}
+
+.log-line.tx {
+  color:#a2ccf4
+}
+
+.log-line.rx {
+  color:#95e2c5
+}
+
+.log-line.err {
+  color:#ffb5aa
+}
+
+.subtle {
+  font-size:12px;
+  padding:7px 11px
+}
+
+.log:empty:before {
+  content:'ログはまだありません';
+  color:#8191a3
+}
+
+footer {
+  font-size:12px;
+  text-align:center;
+  color:#718199;
+  margin-top:26px
+}
+
+footer a {
+  color:#3775b7;
+  text-decoration:none
+}
+
+@media(max-width:680px) {
+  .container {
+    padding:22px 12px
+  }
+  .masthead {
+    align-items:start
+  }
+  .card {
+    padding:18px 15px
+  }
+  .fields {
+    grid-template-columns:1fr 1fr
+  }
+  .fields label:first-child {
+    grid-column:1/-1
+  }
+  .commands {
+    grid-template-columns:1fr 1fr
+  }
+  h1 {
+    font-size:27px
+  }
+  .hint {
+    font-size:11px
+  }
+}
+
