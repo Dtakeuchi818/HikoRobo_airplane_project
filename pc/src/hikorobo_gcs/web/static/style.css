@@ -298,3 +298,49 @@ footer a {
   }
 }
 
+
+/* HikoRobo GCS 0.4: diagnostics and transport selection */
+[hidden] { display:none !important; }
+select {display:block;width:100%;margin-top:7px;border:1px solid #cbd7e5;border-radius:9px;padding:12px;background:#fff;color:#152739;font:inherit;}
+.transport-tabs {display:flex;gap:10px;margin:0 0 20px;flex-wrap:wrap;}
+.radio-tab {display:flex;align-items:center;gap:9px;cursor:pointer;border:1px solid #cbd7e5;border-radius:10px;padding:11px 15px;background:#f7fafc;font-size:14px;}
+.radio-tab:has(input:checked){background:#e9f3fd;border-color:#3b7daf;color:#155b93;}
+.radio-tab input,.check-label input{width:auto;margin:0;accent-color:#1c70b2;}
+.inline-row {display:flex;align-items:end;gap:12px;flex-wrap:wrap;}
+.discover-row {margin-top:15px;}
+.discover-row label{flex:1;max-width:300px;}
+.action-row {display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:20px;}
+.action-row .hint {margin-left:8px;}
+.monitor-summary {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+.stat {background:#f6f9fc;border:1px solid #e3eaf3;border-radius:10px;padding:15px 16px;min-height:82px;}
+.stat span {display:block;font-size:12px;color:#697d91;margin-bottom:8px;}
+.stat strong {display:block;font-size:20px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+.monitor-controls {margin-top:18px;align-items:center;}
+.monitor-controls .check-label{display:flex;align-items:center;gap:8px;min-height:44px;}
+.monitor-controls label:has(select){max-width:145px;}
+.quality-summary{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:18px;}
+.quality-controls label {width:150px;}
+.quality-controls button {align-self:end;}
+.chart-container {border:1px solid #dce7ef;border-radius:10px;overflow:hidden;margin-top:18px;}
+#quality-chart{display:block;width:100%;height:210px;}
+.status.warn .dot {background:#d49c31;}
+.log-line.info {color:#dfc88c;}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #216ca5;outline-offset:2px;}
+footer{margin-top:28px;font-size:12px;color:#718198;display:flex;gap:9px;}
+footer a {color:#246eaa;}
+@media (max-width:750px) {
+  .container{padding:18px 12px 48px;}
+  .card{padding:18px 16px;}
+  .fields,.usb-fields{grid-template-columns:1fr;}
+  .commands{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .monitor-summary,.quality-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .masthead{flex-wrap:wrap;}
+  .action-row .hint {margin-left:0;}
+  .quality-controls label{width:130px;}
+}
+@media (max-width:420px) {
+  .monitor-summary,.quality-summary{grid-template-columns:1fr 1fr;}
+  .stat {padding:10px;}
+  .stat strong {font-size:17px;}
+  .masthead h1{font-size:28px;}
+}

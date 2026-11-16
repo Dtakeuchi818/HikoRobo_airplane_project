@@ -1,0 +1,8 @@
+# Overlay for Ubuntu Linux USB Serial/JTAG access.
+# Use with -f compose.gcs.host.yaml -f compose.gcs.usb.yaml
+services:
+  gcs:
+    devices:
+      - "${ESP_PORT:-/dev/ttyACM0}:${ESP_PORT:-/dev/ttyACM0}"
+    group_add:
+      - "${DIALOUT_GID}"
