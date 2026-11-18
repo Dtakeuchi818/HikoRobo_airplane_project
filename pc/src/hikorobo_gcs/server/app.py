@@ -8,6 +8,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import Field
 
 from hikorobo_gcs.server.imu_raw_parser import parse_imu_raw_reply
 from hikorobo_gcs.server.imu_stream import imu_lifespan, stream_imu
@@ -141,3 +142,34 @@ def start_imu_bias(request: ImuBiasStartRequest):
 @app.post("/api/imu-bias/reset", tags=["IMU"])
 def reset_imu_bias(request: TargetRequest):
     return imu_bias_command(request, "IMU_BIAS RESET")
+
+
+class ImuAttitudeRequest(TargetRequest):
+    filter: Literal["COMPLEMENTARY", "MAHONY"]
+    tau_ms: int = Field(ge=50, le=30000)
+    kp_milli: int = Field(ge=0, le=10000)
+    ki_milli: int = Field(ge=0, le=2000)
+
+
+def imu_attitude_command(request: TargetRequest, command: str):
+    result = execute_command(request, command, expected="OK IMU_ATT ")
+    match = re.fullmatch(r"OK IMU_ATT (COMPLEMENTARY|MAHONY) (\d{1,5}) (\d{1,5}) (\d{1,5})",
+                         result["reply"])
+    if not match:
+        raise HTTPException(status_code=502, detail="姿勢フィルタの応答形式が不正です")
+    tau_ms, kp_milli, ki_milli = map(int, match.groups()[1:])
+    if not (50 <= tau_ms <= 30000 and 0 <= kp_milli <= 10000 and 0 <= ki_milli <= 2000):
+        raise HTTPException(status_code=502, detail="姿勢フィルタの応答値が範囲外です")
+    return {"filter": match[1], "tau_ms": tau_ms, "kp_milli": kp_milli, "ki_milli": ki_milli}
+
+
+@app.post("/api/imu-attitude/get", tags=["IMU"])
+def get_imu_attitude(request: TargetRequest):
+    return imu_attitude_command(request, "GET_IMU_ATT")
+
+
+@app.post("/api/imu-attitude/set", tags=["IMU"])
+def set_imu_attitude(request: ImuAttitudeRequest):
+    return imu_attitude_command(
+        request, f"SET_IMU_ATT {request.filter} {request.tau_ms} {request.kp_milli} {request.ki_milli}"
+    )

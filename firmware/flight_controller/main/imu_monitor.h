@@ -37,4 +37,4 @@ typedef struct {
 
 // Copy the latest measurement and its acquisition timestamp from task context.
 bool imu_monitor_get_measurement(imu_measurement_t *out);
-void imu_monitor_handle_bias_command(const char *command, char *reply, size_t capacity);
+void imu_monitor_handle_control_command(const char *command, char *reply, size_t capacity);

@@ -14,5 +14,5 @@ void command_protocol_handle(const char *command, char *response, size_t respons
 typedef void (*command_imu_raw_provider_t)(char *reply, size_t capacity);
 void command_protocol_set_imu_raw_provider(command_imu_raw_provider_t provider);
 
-typedef void (*command_imu_bias_handler_t)(const char *command, char *reply, size_t capacity);
-void command_protocol_set_imu_bias_handler(command_imu_bias_handler_t handler);
+typedef void (*command_imu_control_handler_t)(const char *command, char *reply, size_t capacity);
+void command_protocol_set_imu_control_handler(command_imu_control_handler_t handler);

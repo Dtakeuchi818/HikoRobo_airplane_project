@@ -370,3 +370,21 @@ footer a {color:#246eaa;}
 .imu-graph-range label { display: inline-flex; align-items: center; gap: 6px; }
 .imu-graph-range input[type="number"] { width: 8ch; }
 .imu-graph-range small { color: #b32929; }
+
+.imu-attitude-view canvas {
+  height: clamp(235px, 35vw, 350px);
+  border: 1px solid #d9e1e9;
+  border-radius: 8px;
+  background: #f7f9fc;
+}
+.imu-attitude-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 6px 0 8px;
+  color: #526579;
+  font-size: 12px;
+}
+.imu-attitude-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.imu-attitude-legend i { width: 16px; border-top: 2px solid currentColor; }
+.imu-attitude-legend .world-axis-key { border-top-style: dashed; }

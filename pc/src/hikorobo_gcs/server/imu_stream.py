@@ -14,26 +14,31 @@ from hikorobo_gcs.server.imu_raw_parser import parse_imu_raw_reply
 IMU_STREAM_PORT = 5006
 
 
+ATTITUDE_FIELDS = ("roll_deg", "pitch_deg", "yaw_deg")
+PACKET_FIELD_COUNTS = {"HK1": 10, "HK2": 16, "HK3": 19}
 PHYSICAL_FIELDS = ("ax_mps2", "ay_mps2", "az_mps2", "gx_dps", "gy_dps", "gz_dps")
 
 
 def parse_imu_packet(packet: bytes) -> dict[str, int | float | str]:
-    if len(packet) > 191:
+    if len(packet) > 223:
         raise ValueError("IMU packet too long")
     version, kind, boot_id, *fields = packet.decode("ascii").split()
-    if version not in ("HK1", "HK2") or kind != "IMU" or not re.fullmatch(r"[0-9a-f]{8}", boot_id):
+    if version not in PACKET_FIELD_COUNTS or kind != "IMU" or not re.fullmatch(r"[0-9a-f]{8}", boot_id):
         raise ValueError("invalid IMU header")
-    if len(fields) != (16 if version == "HK2" else 10):
+    if len(fields) != PACKET_FIELD_COUNTS[version]:
         raise ValueError("invalid IMU field count")
     sample = parse_imu_raw_reply("OK IMU_RAW " + " ".join(fields[:10]))
     if sample["t_us"] > 2**53 - 1:
         raise ValueError("timestamp outside browser integer range")
 
     physical = {}
-    for key, value in zip(PHYSICAL_FIELDS, fields[10:]):
+    for key, value in zip(PHYSICAL_FIELDS + ATTITUDE_FIELDS, fields[10:]):
         if not re.fullmatch(r"-?[0-9]{1,3}\.[0-9]{6}", value):
             raise ValueError(f"invalid IMU field {key}")
         physical[key] = float(value)
+    for key, limit in zip(ATTITUDE_FIELDS, (180, 90, 180)):
+        if abs(physical.get(key, 0)) > limit:
+            raise ValueError(f"{key} outside attitude range")
     return {"boot_id": boot_id, **sample, **physical}
 
 

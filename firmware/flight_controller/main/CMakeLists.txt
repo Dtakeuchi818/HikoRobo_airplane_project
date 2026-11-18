@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "main.c"
         "imu_monitor.c"
+        "imu_attitude.c"
     INCLUDE_DIRS "."
     REQUIRES
         command_protocol

@@ -4,11 +4,15 @@
   const button = document.getElementById("imu-graph-toggle");
   const state = document.getElementById("imu-graph-state");
   const hostInput = document.getElementById("host");
+  const attitudeView = document.getElementById("imu-attitude-view");
+  const attitudeViewState = document.getElementById("imu-attitude-view-state");
+  const attitudeFields = ["roll_deg", "pitch_deg", "yaw_deg"];
   const plots = [
     ["accel", ["ax", "ay", "az"]],
     ["gyro", ["gx", "gy", "gz"]],
     ["accel-mps2", ["ax_mps2", "ay_mps2", "az_mps2"], true],
     ["gyro-dps", ["gx_dps", "gy_dps", "gz_dps"], true],
+    ["attitude", attitudeFields, true],
   ].map(([kind, fields, physical = false]) => ({
     canvas: document.getElementById(`imu-${kind}-graph`),
     fixed: document.getElementById(`imu-${kind}-fixed`),
@@ -28,6 +32,104 @@
   let samples = [];
   let missing = 0;
   let idleTimer;
+  let attitudeLive = false;
+
+  function drawAttitude(sample) {
+    const width = attitudeView.clientWidth;
+    const height = attitudeView.clientHeight;
+    const pixelRatio = window.devicePixelRatio || 1;
+    attitudeView.width = Math.round(width * pixelRatio);
+    attitudeView.height = Math.round(height * pixelRatio);
+    const ctx = attitudeView.getContext("2d");
+    ctx.scale(pixelRatio, pixelRatio);
+    const scale = Math.min(width, height) * 0.24;
+    const azimuth = Math.PI / 5, elevation = Math.PI / 6;
+    const ca = Math.cos(azimuth), sa = Math.sin(azimuth);
+    const ce = Math.cos(elevation), se = Math.sin(elevation);
+
+    function project([x, y, z]) {
+      const depth = x * sa + y * ca;
+      return [width / 2 + scale * (x * ca - y * sa),
+              height * 0.58 + scale * (depth * se - z * ce)];
+    }
+
+    function line(from, to) {
+      ctx.moveTo(...project(from));
+      ctx.lineTo(...project(to));
+    }
+
+    ctx.strokeStyle = "#d9e1e9";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = -4; i <= 4; i++) {
+      const offset = i * 0.4;
+      line([offset, -1.6, 0], [offset, 1.6, 0]);
+      line([-1.6, offset, 0], [1.6, offset, 0]);
+    }
+    ctx.stroke();
+
+    const origin = project([0, 0, 0]);
+    const basis = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+
+    function drawAxes(vectors, world) {
+      const length = world ? 1.65 : 1.06;
+      ctx.font = world ? "12px system-ui" : "600 12px system-ui";
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
+      vectors.forEach((axis, i) => {
+        const end = project(axis.map(value => value * length));
+        const dx = end[0] - origin[0], dy = end[1] - origin[1];
+        const screenLength = Math.hypot(dx, dy);
+        const label = `${world ? "W" : "IMU"} ${"XYZ"[i]}`;
+        ctx.strokeStyle = ctx.fillStyle = colors[i];
+        ctx.lineWidth = world ? 1.5 : 3;
+        ctx.setLineDash(world ? [5, 4] : []);
+        ctx.beginPath();
+        ctx.moveTo(...origin);
+        ctx.lineTo(...end);
+        ctx.stroke();
+        if (screenLength >= 5) {
+          const angle = Math.atan2(dy, dx);
+          ctx.beginPath();
+          ctx.moveTo(...end);
+          for (const offset of [-0.45, 0.45]) {
+            ctx.lineTo(end[0] - 9 * Math.cos(angle + offset),
+                       end[1] - 9 * Math.sin(angle + offset));
+          }
+          ctx.fill();
+        }
+        // An axis aimed at the camera has a short projection; label it off the origin.
+        const labelX = screenLength >= 5 ? end[0] + 21 * dx / screenLength : end[0] + 29;
+        const labelY = screenLength >= 5 ? end[1] + 13 * dy / screenLength : end[1] - 13 - i * 13;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#f7f9fc";
+        ctx.strokeText(label, labelX, labelY);
+        ctx.fillText(label, labelX, labelY);
+      });
+    }
+
+    drawAxes(basis, true);
+    if (!sample || !attitudeFields.every(field => Number.isFinite(sample[field]))) return;
+
+    const [roll, pitch, yaw] = attitudeFields.map(field => sample[field] * Math.PI / 180);
+    const cr = Math.cos(roll), sr = Math.sin(roll);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    // Columns of Rz(yaw) Ry(pitch) Rx(roll) are the IMU axes in world coordinates.
+    drawAxes([
+      [cy * cp, sy * cp, -sp],
+      [cy * sp * sr - sy * cr, sy * sp * sr + cy * cr, cp * sr],
+      [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr],
+    ], false);
+  }
+
+  function updateAttitudeView() {
+    const latest = samples.at(-1);
+    const valid = latest && attitudeFields.every(field => Number.isFinite(latest[field]));
+    drawAttitude(attitudeLive && valid ? latest : null);
+    const message = !attitudeLive ? "姿勢データ待ち" : valid ? "受信中" : "姿勢データなし";
+    if (attitudeViewState.textContent !== message) attitudeViewState.textContent = message;
+  }
 
   function draw({canvas, fields, physical, range}) {
     const width = canvas.clientWidth;
@@ -97,7 +199,9 @@
         }
         const x = right - (latest - sample.t_us) * (right - left) / windowUs;
         const y = bottom - (sample[field] - low) * (bottom - top) / (step * 4);
-        if (previous && sample.seq === previous.seq + 1 && sample.t_us - previous.t_us <= 500_000) {
+        const wrapped = (field === "roll_deg" || field === "yaw_deg")
+          && previous && Math.abs(sample[field] - previous[field]) > 180;
+        if (previous && !wrapped && sample.seq === previous.seq + 1 && sample.t_us - previous.t_us <= 500_000) {
           ctx.lineTo(x, y);
         } else {
           ctx.moveTo(x, y);
@@ -116,6 +220,7 @@
       element.textContent = latest?.[field] ?? "—";
     }
     for (const plot of plots) draw(plot);
+    updateAttitudeView();
   }
 
   function stop(label) {
@@ -123,6 +228,8 @@
     socket = null;
     if (current) current.close();
     clearTimeout(idleTimer);
+    attitudeLive = false;
+    updateAttitudeView();
     state.textContent = label;
     button.textContent = "ライブ表示開始";
   }
@@ -163,10 +270,15 @@
       if (!samples.length) return;
       const cutoff = samples.at(-1).t_us - windowUs;
       samples = samples.filter(sample => sample.t_us >= cutoff).slice(-2048);
+      attitudeLive = true;
       redraw();
       state.textContent = `受信中 · 連番の欠落 ${missing}`;
       clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => { state.textContent = "IMUデータの受信が停止"; }, 2000);
+      idleTimer = setTimeout(() => {
+        state.textContent = "IMUデータの受信が停止";
+        attitudeLive = false;
+        updateAttitudeView();
+      }, 2000);
     });
     current.addEventListener("close", () => {
       if (socket === current) stop("WebSocket切断");
@@ -202,5 +314,6 @@
     max.addEventListener("input", updateRange);
     updateRange();
   }
+  updateAttitudeView();
   window.addEventListener("resize", redraw);
 })();

@@ -8,17 +8,20 @@ from hikorobo_gcs.server import imu_stream
 from hikorobo_gcs.server.app import app
 
 
-@pytest.mark.parametrize("version", [b"HK1", b"HK2"])
+@pytest.mark.parametrize("version", [b"HK1", b"HK2", b"HK3"])
 def test_imu_udp_to_websocket(monkeypatch, version):
     raw = b" IMU 14d1c6b9 42 4100000 -12 5 16384 3 -2 11 0 0x03"
     physical = {}
     converted = b""
-    if version == b"HK2":
+    if version in (b"HK2", b"HK3"):
         converted = b" -0.007178 0.002991 9.801001 0.026250 -0.017500 0.096250"
         physical = {
             "ax_mps2": -0.007178, "ay_mps2": 0.002991, "az_mps2": 9.801001,
             "gx_dps": 0.026250, "gy_dps": -0.017500, "gz_dps": 0.096250,
         }
+    if version == b"HK3":
+        converted += b" -12.500000 2.125000 179.000000"
+        physical.update(roll_deg=-12.5, pitch_deg=2.125, yaw_deg=179.0)
     monkeypatch.setattr(imu_stream, "IMU_STREAM_PORT", 0)
     with TestClient(app) as client:
         port = app.state.imu_receiver.transport.get_extra_info("sockname")[1]
@@ -67,3 +70,31 @@ def test_imu_bias_commands(monkeypatch):
             "state": "IDLE", "count": 0, "applied": False,
         }
     assert commands == ["IMU_BIAS START -Z", "GET_IMU_BIAS", "IMU_BIAS RESET"]
+
+
+def test_imu_attitude_commands(monkeypatch):
+    from hikorobo_gcs.server import app as app_module
+
+    monkeypatch.setattr(imu_stream, "IMU_STREAM_PORT", 0)
+    commands = []
+
+    def execute(request, command, *, expected):
+        commands.append(command)
+        assert str(request.host) == "127.0.0.1"
+        assert expected == "OK IMU_ATT "
+        replies = {
+            "GET_IMU_ATT": "OK IMU_ATT COMPLEMENTARY 500 1000 50",
+            "SET_IMU_ATT MAHONY 750 2200 80": "OK IMU_ATT MAHONY 750 2200 80",
+        }
+        return {"reply": replies[command]}
+
+    monkeypatch.setattr(app_module, "execute_command", execute)
+    with TestClient(app) as client:
+        target = {"host": "127.0.0.1"}
+        assert client.post("/api/imu-attitude/get", json=target).json() == {
+            "filter": "COMPLEMENTARY", "tau_ms": 500, "kp_milli": 1000, "ki_milli": 50,
+        }
+        settings = {"filter": "MAHONY", "tau_ms": 750, "kp_milli": 2200, "ki_milli": 80}
+        assert client.post("/api/imu-attitude/set", json={**target, **settings, "tau_ms": 0}).status_code == 422
+        assert client.post("/api/imu-attitude/set", json={**target, **settings}).json() == settings
+    assert commands == ["GET_IMU_ATT", "SET_IMU_ATT MAHONY 750 2200 80"]

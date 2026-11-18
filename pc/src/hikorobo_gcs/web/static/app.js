@@ -513,6 +513,48 @@ function clearBiasStatus() {
   clearTimeout(biasPoll);
   biasPoll = null;
   biasStatus.textContent = "状態未確認";
+  $("imu-attitude-state").textContent = "設定未確認";
   updateBiasControls();
 }
 updateBiasControls();
+
+
+const attitudeForm = $("imu-attitude-form");
+const attitudeControls = $("imu-attitude-controls");
+const attitudeStatus = $("imu-attitude-state");
+
+async function configureAttitude(apply) {
+  if (working || attitudeControls.disabled) return;
+  attitudeControls.disabled = true;
+  try {
+    const target = requestParameters();
+    const body = apply ? {
+      ...target,
+      filter: $("imu-attitude-filter").value,
+      tau_ms: Math.round($("imu-attitude-tau").valueAsNumber * 1000),
+      kp_milli: Math.round($("imu-attitude-kp").valueAsNumber * 1000),
+      ki_milli: Math.round($("imu-attitude-ki").valueAsNumber * 1000),
+    } : target;
+    const result = await post(`/api/imu-attitude/${apply ? "set" : "get"}`, body);
+    if (JSON.stringify(requestParameters()) !== JSON.stringify(target)) {
+      attitudeStatus.textContent = "接続先が変わりました。XIAOの設定を取得してください";
+      return;
+    }
+    $("imu-attitude-filter").value = result.filter;
+    $("imu-attitude-tau").value = result.tau_ms / 1000;
+    $("imu-attitude-kp").value = result.kp_milli / 1000;
+    $("imu-attitude-ki").value = result.ki_milli / 1000;
+    const selected = result.filter === "MAHONY" ? "Mahonyフィルタ" : "相補フィルタ";
+    attitudeStatus.textContent = `XIAOで適用中 · ${selected}`;
+  } catch (error) {
+    attitudeStatus.textContent = error.message;
+  } finally {
+    attitudeControls.disabled = false;
+  }
+}
+
+attitudeForm.addEventListener("submit", event => {
+  event.preventDefault();
+  void configureAttitude(true);
+});
+$("imu-attitude-get").addEventListener("click", () => void configureAttitude(false));

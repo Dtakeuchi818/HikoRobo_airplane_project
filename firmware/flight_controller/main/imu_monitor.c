@@ -1,10 +1,12 @@
 #include "imu_monitor.h"
+#include "imu_attitude.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "driver/i2c_master.h"
@@ -62,10 +64,19 @@ typedef struct {
 typedef struct {
     imu_raw_sample_t raw;
     imu_measurement_t measurement;
+    imu_euler_t attitude;
+    bool attitude_valid;
 } imu_stream_sample_t;
 
 static imu_bias_t s_bias;
 static imu_bias_t s_latest_bias;
+static imu_attitude_config_t s_attitude_config = {
+    .filter = IMU_FILTER_COMPLEMENTARY,
+    .tau_ms = 500,
+    .kp_milli = 1000,
+    .ki_milli = 50,
+};
+static unsigned s_attitude_revision;
 static struct {
     int64_t deadline_us;
     int64_t last_sample_us;
@@ -144,6 +155,7 @@ static void collect_calibration(const imu_raw_sample_t *raw)
         else candidate.gyro[i - 3] = offset;
     }
     s_bias = candidate;
+    ++s_attitude_revision;
     s_calibration.state = "DONE";
 }
 
@@ -176,15 +188,22 @@ static void imu_stream_task(void *arg)
 
         const imu_raw_sample_t sample = frame.raw;
         const imu_measurement_t *measurement = &frame.measurement;
-        char packet[192];
+        char packet[224];
         int size = snprintf(packet, sizeof(packet),
-                            "HK2 IMU %08" PRIx32 " %" PRIu32 " %" PRIi64
+                            "%s IMU %08" PRIx32 " %" PRIu32 " %" PRIi64
                             " %d %d %d %d %d %d %d 0x%02X %.6f %.6f %.6f %.6f %.6f %.6f",
+                            frame.attitude_valid ? "HK3" : "HK2",
                             boot_id, sample.seq, sample.t_us, sample.ax, sample.ay, sample.az,
                             sample.gx, sample.gy, sample.gz, sample.temp, (unsigned)sample.status,
                             measurement->accel_mps2[0], measurement->accel_mps2[1],
                             measurement->accel_mps2[2], measurement->gyro_dps[0],
                             measurement->gyro_dps[1], measurement->gyro_dps[2]);
+        if (frame.attitude_valid && size > 0 && (size_t)size < sizeof(packet)) {
+            const int extra = snprintf(packet + size, sizeof(packet) - (size_t)size, " %.6f %.6f %.6f",
+                                       frame.attitude.roll_deg, frame.attitude.pitch_deg, frame.attitude.yaw_deg);
+            if (extra < 0) continue;
+            size += extra;
+        }
         if (size > 0 && (size_t)size < sizeof(packet)) {
             sendto(fd, packet, (size_t)size, MSG_DONTWAIT,
                    (const struct sockaddr *)&target, sizeof(target));
@@ -233,6 +252,8 @@ static void imu_raw_print_task(void *arg)
 {
     (void)arg;
     imu_stream_start();
+    imu_attitude_t attitude = {0};
+    unsigned attitude_revision = 0;
     ESP_LOGI(TAG, "Header: IMU_RAW,t_us,ax,ay,az,gx,gy,gz,temp,status");
     while (true) {
         uint8_t status = 0;
@@ -268,12 +289,23 @@ static void imu_raw_print_task(void *arg)
             s_latest = sample;
             s_latest_bias = bias;
             s_has_sample = true;
+            const imu_attitude_config_t config = s_attitude_config;
+            const unsigned revision = s_attitude_revision;
             taskEXIT_CRITICAL(&s_sample_mux);
-            if (s_stream_queue != NULL) {
-                imu_stream_sample_t frame = {.raw = sample};
-                convert_measurement(&sample, &bias, &frame.measurement);
-                xQueueOverwrite(s_stream_queue, &frame);
+
+            if (revision != attitude_revision) {
+                memset(attitude.integral, 0, sizeof(attitude.integral));
+                attitude_revision = revision;
             }
+            imu_stream_sample_t frame = {.raw = sample};
+            convert_measurement(&sample, &bias, &frame.measurement);
+            if ((status & 0x03) == 0x03) {
+                frame.attitude_valid = imu_attitude_update(&attitude, &config, t_us,
+                                                           frame.measurement.accel_mps2,
+                                                           frame.measurement.gyro_dps,
+                                                           &frame.attitude);
+            }
+            if (s_stream_queue != NULL) xQueueOverwrite(s_stream_queue, &frame);
             printf("IMU_RAW,%" PRIi64 ",%d,%d,%d,%d,%d,%d,%d,0x%02X\n",
                    t_us, ax, ay, az, gx, gy, gz, temp, (unsigned)status);
         } else {
@@ -410,7 +442,7 @@ bool imu_monitor_get_measurement(imu_measurement_t *out)
     return ready;
 }
 
-void imu_monitor_handle_bias_command(const char *command, char *reply, size_t capacity)
+static void handle_bias_command(const char *command, char *reply, size_t capacity)
 {
     const bool query = strcmp(command, "GET_IMU_BIAS") == 0;
     const bool reset = strcmp(command, "IMU_BIAS RESET") == 0;
@@ -437,6 +469,7 @@ void imu_monitor_handle_bias_command(const char *command, char *reply, size_t ca
     expire_calibration(now);
     const char *error = NULL;
     if (reset) {
+        if (s_bias.applied) ++s_attitude_revision;
         s_bias = (imu_bias_t){0};
         s_calibration.deadline_us = 0;
         s_calibration.count = 0;
@@ -458,4 +491,57 @@ void imu_monitor_handle_bias_command(const char *command, char *reply, size_t ca
     taskEXIT_CRITICAL(&s_sample_mux);
     if (error) snprintf(reply, capacity, "ERR %s", error);
     else snprintf(reply, capacity, "OK IMU_BIAS %s %u %u", state, count, applied);
+}
+
+static bool parse_attitude_config(const char *args, imu_attitude_config_t *config)
+{
+    if (strncmp(args, "COMPLEMENTARY ", 14) == 0) {
+        config->filter = IMU_FILTER_COMPLEMENTARY;
+        args += 14;
+    } else if (strncmp(args, "MAHONY ", 7) == 0) {
+        config->filter = IMU_FILTER_MAHONY;
+        args += 7;
+    } else {
+        return false;
+    }
+
+    unsigned *const values[] = {&config->tau_ms, &config->kp_milli, &config->ki_milli};
+    const unsigned limits[] = {30000, 10000, 2000};
+    for (unsigned i = 0; i < 3; ++i) {
+        const size_t digits = strspn(args, "0123456789");
+        if (!digits || digits > 5 || args[digits] != (i == 2 ? '\0' : ' ')) return false;
+        const unsigned long value = strtoul(args, NULL, 10);
+        if (value > limits[i]) return false;
+        *values[i] = (unsigned)value;
+        if (i < 2) args += digits + 1;
+    }
+    return config->tau_ms >= 50;
+}
+
+void imu_monitor_handle_control_command(const char *command, char *reply, size_t capacity)
+{
+    const bool set_attitude = strncmp(command, "SET_IMU_ATT ", 12) == 0;
+    if (!set_attitude && strcmp(command, "GET_IMU_ATT") != 0) {
+        handle_bias_command(command, reply, capacity);
+        return;
+    }
+
+    imu_attitude_config_t config;
+    if (set_attitude && !parse_attitude_config(command + 12, &config)) {
+        snprintf(reply, capacity, "ERR BAD_ARGUMENT");
+        return;
+    }
+    taskENTER_CRITICAL(&s_sample_mux);
+    if (set_attitude && (config.filter != s_attitude_config.filter
+        || config.tau_ms != s_attitude_config.tau_ms
+        || config.kp_milli != s_attitude_config.kp_milli
+        || config.ki_milli != s_attitude_config.ki_milli)) {
+        s_attitude_config = config;
+        ++s_attitude_revision;
+    }
+    config = s_attitude_config;
+    taskEXIT_CRITICAL(&s_sample_mux);
+    snprintf(reply, capacity, "OK IMU_ATT %s %u %u %u",
+             config.filter == IMU_FILTER_MAHONY ? "MAHONY" : "COMPLEMENTARY",
+             config.tau_ms, config.kp_milli, config.ki_milli);
 }

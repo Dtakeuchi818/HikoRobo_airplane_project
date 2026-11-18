@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>HikoRobo GCS</title>
-  <link rel="stylesheet" href="/static/style.css?v=8">
-  <script src="/static/app.js?v=6" defer></script>
-  <script src="/static/imu_graph.js?v=6" defer></script>
+  <link rel="stylesheet" href="/static/style.css?v=9">
+  <script src="/static/app.js?v=7" defer></script>
+  <script src="/static/imu_graph.js?v=8" defer></script>
 </head>
 <body>
 <main class="container">
@@ -138,6 +138,40 @@
       <small id="imu-bias-state" role="status">状態未確認</small>
     </fieldset>
     <p class="hint" id="imu-bias-help">機体を停止し、選んだ軸が真上を向くように置いてください。測定中は機体を動かさないでください。補正はXIAO内で適用され、上向きの軸に約1 gが残ります。</p>
+    <form id="imu-attitude-form">
+      <fieldset class="imu-graph-range" id="imu-attitude-controls">
+        <legend>姿勢フィルタ</legend>
+        <label>アルゴリズム
+          <select id="imu-attitude-filter">
+            <option value="COMPLEMENTARY">相補フィルタ</option>
+            <option value="MAHONY">Mahonyフィルタ</option>
+          </select>
+        </label>
+        <label>相補フィルタ τ (s)
+          <input id="imu-attitude-tau" type="number" min="0.05" max="30" step="0.001" value="0.5" required>
+        </label>
+        <label>Mahony Kp
+          <input id="imu-attitude-kp" type="number" min="0" max="10" step="0.001" value="1" required>
+        </label>
+        <label>Mahony Ki
+          <input id="imu-attitude-ki" type="number" min="0" max="2" step="0.001" value="0.05" required>
+        </label>
+        <button type="submit">設定を適用</button>
+        <button type="button" id="imu-attitude-get">XIAOの設定を取得</button>
+        <small id="imu-attitude-state" role="status">設定未確認</small>
+      </fieldset>
+    </form>
+    <figure class="imu-graph imu-attitude-view">
+      <figcaption>IMUの3D姿勢</figcaption>
+      <div class="imu-attitude-legend">
+        <span><i class="world-axis-key" aria-hidden="true"></i>地面基準の軸</span>
+        <span><i class="sensor-axis-key" aria-hidden="true"></i>IMUの軸</span>
+        <span id="imu-attitude-view-state" role="status">姿勢データ待ち</span>
+      </div>
+      <canvas id="imu-attitude-view" role="img"
+              aria-label="地面基準に対するIMUのXYZ軸の向き"></canvas>
+      <p class="hint">地面はXY平面、+Zは鉛直上向きです。地面基準のX・Yの向きは姿勢初期化時のヨーを基準にします。</p>
+    </figure>
     <figure class="imu-graph">
       <figcaption>
         加速度（raw counts）
@@ -213,6 +247,26 @@
         <small id="imu-gyro-dps-range-error" role="status"></small>
       </fieldset>
       <canvas id="imu-gyro-dps-graph" role="img" aria-label="角速度（°/s）3軸の直近10秒"></canvas>
+    </figure>
+    <figure class="imu-graph">
+      <figcaption>
+        姿勢（°）
+        <div class="imu-graph-readings">
+          <small>最新受信値</small>
+          <span>ロール <strong id="imu-live-roll_deg">—</strong></span>
+          <span>ピッチ <strong id="imu-live-pitch_deg">—</strong></span>
+          <span>ヨー <strong id="imu-live-yaw_deg">—</strong></span>
+        </div>
+      </figcaption>
+      <fieldset class="imu-graph-range" aria-label="姿勢の縦軸">
+        <legend>縦軸</legend>
+        <label><input id="imu-attitude-fixed" type="checkbox"> 範囲を固定</label>
+        <label>最小値 <input id="imu-attitude-min" type="number" value="-180" step="any" required disabled></label>
+        <label>最大値 <input id="imu-attitude-max" type="number" value="180" step="any" required disabled></label>
+        <small id="imu-attitude-range-error" role="status"></small>
+      </fieldset>
+      <canvas id="imu-attitude-graph" role="img" aria-label="ロール・ピッチ・ヨーの直近10秒"></canvas>
+      <p class="hint">ヨーは初期姿勢からの相対角度で、時間とともにドリフトします。</p>
     </figure>
     <p class="hint">横軸は最新サンプルからの経過秒数。受信が途切れた区間は線を結びません。</p>
   </section>

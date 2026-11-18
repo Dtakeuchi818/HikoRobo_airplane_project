@@ -20,7 +20,7 @@ void app_main(void)
     wifi_manager_start(); // Wi-Fi joins Ubuntu hotspot asynchronously.
     command_protocol_set_wifi_status_provider(wifi_manager_format_status);
     command_protocol_set_imu_raw_provider(imu_monitor_format_latest);
-    command_protocol_set_imu_bias_handler(imu_monitor_handle_bias_command);
+    command_protocol_set_imu_control_handler(imu_monitor_handle_control_command);
 
     BaseType_t usb_result = xTaskCreate(usb_task, "usb_command", 4096, NULL, 4, NULL);
     BaseType_t udp_result = xTaskCreate(udp_transport_run, "udp_command", 6144, NULL, 4, NULL);
