@@ -7,7 +7,7 @@
   <title>HikoRobo GCS</title>
   <link rel="stylesheet" href="/static/style.css?v=8">
   <script src="/static/app.js?v=5" defer></script>
-  <script src="/static/imu_graph.js?v=3" defer></script>
+  <script src="/static/imu_graph.js?v=4" defer></script>
 </head>
 <body>
 <main class="container">
@@ -156,6 +156,44 @@
         <small id="imu-gyro-range-error" role="status"></small>
       </fieldset>
       <canvas id="imu-gyro-graph" role="img" aria-label="角速度3軸の直近10秒"></canvas>
+    </figure>
+    <figure class="imu-graph">
+      <figcaption>
+        加速度（m/s²）
+        <div class="imu-graph-readings">
+          <small>最新受信値</small>
+          <span>X <strong id="imu-live-ax_mps2">—</strong></span>
+          <span>Y <strong id="imu-live-ay_mps2">—</strong></span>
+          <span>Z <strong id="imu-live-az_mps2">—</strong></span>
+        </div>
+      </figcaption>
+      <fieldset class="imu-graph-range" aria-label="加速度（m/s²）の縦軸">
+        <legend>縦軸</legend>
+        <label><input id="imu-accel-mps2-fixed" type="checkbox"> 範囲を固定</label>
+        <label>最小値 <input id="imu-accel-mps2-min" type="number" value="-20" step="any" required disabled></label>
+        <label>最大値 <input id="imu-accel-mps2-max" type="number" value="20" step="any" required disabled></label>
+        <small id="imu-accel-mps2-range-error" role="status"></small>
+      </fieldset>
+      <canvas id="imu-accel-mps2-graph" role="img" aria-label="加速度（m/s²）3軸の直近10秒"></canvas>
+    </figure>
+    <figure class="imu-graph">
+      <figcaption>
+        角速度（°/s）
+        <div class="imu-graph-readings">
+          <small>最新受信値</small>
+          <span>X <strong id="imu-live-gx_dps">—</strong></span>
+          <span>Y <strong id="imu-live-gy_dps">—</strong></span>
+          <span>Z <strong id="imu-live-gz_dps">—</strong></span>
+        </div>
+      </figcaption>
+      <fieldset class="imu-graph-range" aria-label="角速度（°/s）の縦軸">
+        <legend>縦軸</legend>
+        <label><input id="imu-gyro-dps-fixed" type="checkbox"> 範囲を固定</label>
+        <label>最小値 <input id="imu-gyro-dps-min" type="number" value="-300" step="any" required disabled></label>
+        <label>最大値 <input id="imu-gyro-dps-max" type="number" value="300" step="any" required disabled></label>
+        <small id="imu-gyro-dps-range-error" role="status"></small>
+      </fieldset>
+      <canvas id="imu-gyro-dps-graph" role="img" aria-label="角速度（°/s）3軸の直近10秒"></canvas>
     </figure>
     <p class="hint">横軸は最新サンプルからの経過秒数。受信が途切れた区間は線を結びません。</p>
   </section>

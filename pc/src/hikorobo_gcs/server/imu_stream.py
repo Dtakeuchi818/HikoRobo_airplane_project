@@ -14,16 +14,27 @@ from hikorobo_gcs.server.imu_raw_parser import parse_imu_raw_reply
 IMU_STREAM_PORT = 5006
 
 
-def parse_imu_packet(packet: bytes) -> dict[str, int | str]:
-    if len(packet) > 127:
+PHYSICAL_FIELDS = ("ax_mps2", "ay_mps2", "az_mps2", "gx_dps", "gy_dps", "gz_dps")
+
+
+def parse_imu_packet(packet: bytes) -> dict[str, int | float | str]:
+    if len(packet) > 191:
         raise ValueError("IMU packet too long")
-    version, kind, boot_id, fields = packet.decode("ascii").split(maxsplit=3)
-    if (version, kind) != ("HK1", "IMU") or not re.fullmatch(r"[0-9a-f]{8}", boot_id):
+    version, kind, boot_id, *fields = packet.decode("ascii").split()
+    if version not in ("HK1", "HK2") or kind != "IMU" or not re.fullmatch(r"[0-9a-f]{8}", boot_id):
         raise ValueError("invalid IMU header")
-    sample = parse_imu_raw_reply(f"OK IMU_RAW {fields}")
+    if len(fields) != (16 if version == "HK2" else 10):
+        raise ValueError("invalid IMU field count")
+    sample = parse_imu_raw_reply("OK IMU_RAW " + " ".join(fields[:10]))
     if sample["t_us"] > 2**53 - 1:
         raise ValueError("timestamp outside browser integer range")
-    return {"boot_id": boot_id, **sample}
+
+    physical = {}
+    for key, value in zip(PHYSICAL_FIELDS, fields[10:]):
+        if not re.fullmatch(r"-?[0-9]{1,3}\.[0-9]{6}", value):
+            raise ValueError(f"invalid IMU field {key}")
+        physical[key] = float(value)
+    return {"boot_id": boot_id, **sample, **physical}
 
 
 class ImuReceiver(asyncio.DatagramProtocol):

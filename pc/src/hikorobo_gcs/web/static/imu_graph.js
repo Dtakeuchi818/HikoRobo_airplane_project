@@ -7,13 +7,16 @@
   const plots = [
     ["accel", ["ax", "ay", "az"]],
     ["gyro", ["gx", "gy", "gz"]],
-  ].map(([kind, fields]) => ({
+    ["accel-mps2", ["ax_mps2", "ay_mps2", "az_mps2"], true],
+    ["gyro-dps", ["gx_dps", "gy_dps", "gz_dps"], true],
+  ].map(([kind, fields, physical = false]) => ({
     canvas: document.getElementById(`imu-${kind}-graph`),
     fixed: document.getElementById(`imu-${kind}-fixed`),
     min: document.getElementById(`imu-${kind}-min`),
     max: document.getElementById(`imu-${kind}-max`),
     error: document.getElementById(`imu-${kind}-range-error`),
     fields,
+    physical,
     range: null,
   }));
   const readings = plots.flatMap(({fields}) =>
@@ -26,7 +29,7 @@
   let missing = 0;
   let idleTimer;
 
-  function draw({canvas, fields, range}) {
+  function draw({canvas, fields, physical, range}) {
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     const ratio = window.devicePixelRatio || 1;
@@ -43,11 +46,16 @@
     } else {
       for (const sample of samples) {
         for (const field of fields) {
+          if (!Number.isFinite(sample[field])) continue;
           low = Math.min(low, sample[field]);
           high = Math.max(high, sample[field]);
         }
       }
-      high = low + 4 * Math.max(1, Math.ceil((high - low) / 4));
+      const quarterSpan = (high - low) / 4;
+      const resolution = physical && quarterSpan > 0
+        ? 10 ** Math.floor(Math.log10(quarterSpan))
+        : 1;
+      high = low + 4 * resolution * Math.max(1, Math.ceil(quarterSpan / resolution));
     }
     const step = (high - low) / 4;
     const latest = samples.at(-1)?.t_us ?? 0;
@@ -61,7 +69,7 @@
       ctx.moveTo(left, y);
       ctx.lineTo(right, y);
       ctx.textAlign = "right";
-      ctx.fillText(String(low + step * i), left - 6, y + 4);
+      ctx.fillText(String(Number((low + step * i).toPrecision(6))), left - 6, y + 4);
     }
     for (let i = 0; i <= 5; i++) {
       const x = left + (right - left) * i / 5;
@@ -83,6 +91,10 @@
       ctx.beginPath();
       let previous;
       for (const sample of samples) {
+        if (!Number.isFinite(sample[field])) {
+          previous = undefined;
+          continue;
+        }
         const x = right - (latest - sample.t_us) * (right - left) / windowUs;
         const y = bottom - (sample[field] - low) * (bottom - top) / (step * 4);
         if (previous && sample.seq === previous.seq + 1 && sample.t_us - previous.t_us <= 500_000) {
@@ -174,8 +186,10 @@
       } else {
         const low = min.valueAsNumber;
         const high = max.valueAsNumber;
-        if (!min.validity.valid || !max.validity.valid || low >= high) {
-          error.textContent = "−32768〜32767の整数で、最小値を最大値より小さくしてください";
+        if (!min.validity.valid || !max.validity.valid || !(low < high) || !Number.isFinite(high - low)) {
+          error.textContent = plot.physical
+            ? "最小値と最大値を数値で入力し、最小値を最大値より小さくしてください"
+            : "−32768〜32767の整数で、最小値を最大値より小さくしてください";
           return;
         }
         plot.range = [low, high];

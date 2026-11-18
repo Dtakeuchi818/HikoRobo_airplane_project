@@ -45,6 +45,9 @@ static bool s_has_sample = false;
 
 
 #define IMU_STREAM_PORT 5006
+// LSM6DS3TR-C datasheet sensitivities for ±2 g and ±250 dps.
+static const double ACCEL_MPS2_PER_COUNT = 0.061 / 1000.0 * 9.80665;
+static const double GYRO_DPS_PER_COUNT = 8.75 / 1000.0;
 static QueueHandle_t s_stream_queue;
 
 static void imu_stream_task(void *arg)
@@ -74,12 +77,18 @@ static void imu_stream_task(void *arg)
             epoch = current_epoch;
         }
 
-        char packet[128];
+        char packet[192];
         int size = snprintf(packet, sizeof(packet),
-                            "HK1 IMU %08" PRIx32 " %" PRIu32 " %" PRIi64
-                            " %d %d %d %d %d %d %d 0x%02X",
+                            "HK2 IMU %08" PRIx32 " %" PRIu32 " %" PRIi64
+                            " %d %d %d %d %d %d %d 0x%02X %.6f %.6f %.6f %.6f %.6f %.6f",
                             boot_id, sample.seq, sample.t_us, sample.ax, sample.ay, sample.az,
-                            sample.gx, sample.gy, sample.gz, sample.temp, (unsigned)sample.status);
+                            sample.gx, sample.gy, sample.gz, sample.temp, (unsigned)sample.status,
+                            sample.ax * ACCEL_MPS2_PER_COUNT,
+                            sample.ay * ACCEL_MPS2_PER_COUNT,
+                            sample.az * ACCEL_MPS2_PER_COUNT,
+                            sample.gx * GYRO_DPS_PER_COUNT,
+                            sample.gy * GYRO_DPS_PER_COUNT,
+                            sample.gz * GYRO_DPS_PER_COUNT);
         if (size > 0 && (size_t)size < sizeof(packet)) {
             sendto(fd, packet, (size_t)size, MSG_DONTWAIT,
                    (const struct sockaddr *)&target, sizeof(target));
@@ -234,7 +243,7 @@ esp_err_t imu_monitor_start(void)
     // CTRL1_XL: 104 Hz, full-scale +/- 2 g (raw acceleration counts).
     err = write_reg(LSM_CTRL1_XL, 0x40);
     if (err != ESP_OK) goto cleanup;
-    // CTRL2_G: 104 Hz, full-scale +/- 245 dps (raw angular-rate counts).
+    // CTRL2_G: 104 Hz, full-scale +/- 250 dps (raw angular-rate counts).
     err = write_reg(LSM_CTRL2_G, 0x40);
     if (err != ESP_OK) goto cleanup;
 
