@@ -9,5 +9,7 @@ idf_component_register(
         udp_transport
         usb_transport
         esp_driver_i2c
+        lwip
+        esp_hw_support
         esp_timer
 )

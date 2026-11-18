@@ -1,7 +1,4 @@
-"""HikoRobo GCS command GUI, connection monitoring and UDP RTT benchmarking.
-
-No IMU/SBUS streaming or telemetry is started by this server.
-"""
+"""HikoRobo GCS command GUI, connection monitoring and IMU telemetry."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,6 +7,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from hikorobo_gcs.server.imu_raw_parser import parse_imu_raw_reply
+from hikorobo_gcs.server.imu_stream import imu_lifespan, stream_imu
 from hikorobo_gcs.server.udp_commands import (
     DiscoverRequest,
     QualityRequest,
@@ -19,7 +18,8 @@ from hikorobo_gcs.server.udp_commands import (
     execute_command,
 )
 
-app = FastAPI(title="HikoRobo GCS", version="0.4.0")
+app = FastAPI(title="HikoRobo GCS", version="0.4.0", lifespan=imu_lifespan)
+app.add_api_websocket_route("/ws/imu", stream_imu)
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 
@@ -99,8 +99,6 @@ def set_rate(request: RateRequest):
 
 
 # GET_IMU_RAW uses the existing UDP 5005 command request/reply path.
-# It does not need any new Docker port mapping or an incoming UDP listener.
-from hikorobo_gcs.server.imu_raw_parser import parse_imu_raw_reply
 
 
 @app.post("/api/get-imu-raw", tags=["IMU"])

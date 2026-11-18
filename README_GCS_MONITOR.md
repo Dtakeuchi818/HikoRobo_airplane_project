@@ -9,7 +9,7 @@
 - ブラウザが開いている間、2/3/5/10秒周期のPINGで接続状態を監視
 - UDP品質測定（5〜100回、50〜1000ms間隔、RTT中央値/P95/min/max、未応答率、RTT変動、グラフ、CSV保存）
 - 通信ログの表示・テキスト保存、設定のブラウザ内保存
-- すべて既存のXIAOコマンドを使用。**IMU/SBUSストリーム送信・WebSocketは今回使用しない。**
+- 既存のXIAOコマンドに加え、IMU生値をUDPで受信し、WebSocketでライブ波形を表示できます。
 
 ## 導入：まずUDPだけ
 
@@ -29,6 +29,17 @@ curl http://127.0.0.1:8000/api/health
 - 初期状態は通信未確認。IP確認後、「接続確認」を押すとPINGで疎通を判定し、監視を開始。
 - `GET_WIFI` はXIAO側のWi-Fi接続状態/IPを返すだけ。PCのRSSIやXIAOの電波強度ではない。
 - 画面の品質測定はPINGの応答なし率であり、厳密な無線のパケット損失率ではない。別の端末やネットワーク負荷、タイムアウト値に依存する。
+
+## IMUライブ波形
+
+1. `docker compose run --rm idf idf.py menuconfig` を開き、`HikoRobo IMU telemetry` の `Ground PC IPv4 address` にPCのWi-Fi側IPv4を設定します。Ubuntuホットスポットでは、`scripts/ap_status.sh` に表示されるPCのIPを使います。空欄では配信は無効です。
+2. [READMEの手順](README.md#5-build-and-flash)でビルド・書き込みを行います。
+3. `docker compose -f compose.gcs.host.yaml up -d --build gcs` でGCSを起動します。ファイアウォールを使用している場合は、機体が接続するインターフェースからのUDP 5006を許可します。
+4. ブラウザで `http://127.0.0.1:8000` を開き、接続設定にXIAOのIPv4を入力して「IMU ライブ波形」の「ライブ表示開始」を押します。IPは既存の探索や `GET_WIFI` で確認できます。
+
+加速度と角速度の各3軸を生カウントで表示します。横軸はXIAOの取得時刻を基準とした直近10秒です。配信は現行の読み取り周期（約10 Hz）です。従来の単発・ポーリング取得とCSV保存は「IMU 生データ」欄から使えます。
+
+[IMUストリームのプロトコル](shared/protocol/imu_stream_v1.md)
 
 ## USBも使用する場合
 

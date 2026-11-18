@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>HikoRobo GCS</title>
-  <link rel="stylesheet" href="/static/style.css?v=5">
+  <link rel="stylesheet" href="/static/style.css?v=6">
   <script src="/static/app.js?v=5" defer></script>
+  <script src="/static/imu_graph.js?v=1" defer></script>
 </head>
 <body>
 <main class="container">
@@ -107,6 +108,29 @@
     <p class="note">表示値はIMUの符号付き16bit生値です。物理単位への換算・フィルタ処理はしていません。
       XIAOは約10 Hzで最新サンプルを更新し、この画面は選んだ頻度でその最新値をUDPコマンドから取得します。
       全104 Hzサンプルの連続転送ではありません。</p>
+  </section>
+
+  <section class="card" aria-labelledby="imu-graph-title">
+    <div class="section-head">
+      <h2 id="imu-graph-title">IMU ライブ波形</h2>
+      <span class="hint" id="imu-graph-state" role="status">停止中</span>
+    </div>
+    <div class="inline-row imu-controls">
+      <button type="button" class="primary" id="imu-graph-toggle">ライブ表示開始</button>
+      <span class="hint">接続設定のXIAO IPv4を使用</span>
+    </div>
+    <div class="imu-graph-legend" aria-label="軸の凡例">
+      <span>X</span><span>Y</span><span>Z</span>
+    </div>
+    <figure class="imu-graph">
+      <figcaption>加速度（raw counts）</figcaption>
+      <canvas id="imu-accel-graph" role="img" aria-label="加速度3軸の直近10秒"></canvas>
+    </figure>
+    <figure class="imu-graph">
+      <figcaption>角速度（raw counts）</figcaption>
+      <canvas id="imu-gyro-graph" role="img" aria-label="角速度3軸の直近10秒"></canvas>
+    </figure>
+    <p class="hint">横軸は最新サンプルからの経過秒数。受信が途切れた区間は線を結びません。</p>
   </section>
 
   <section class="card" id="quality-card" aria-labelledby="quality-title">

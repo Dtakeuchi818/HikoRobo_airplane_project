@@ -8,9 +8,15 @@
 
 #include "driver/i2c_master.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
+#include "lwip/inet.h"
+#include "lwip/sockets.h"
+#include "sdkconfig.h"
+#include "wifi_manager.h"
 
 #define IMU_SDA_GPIO             GPIO_NUM_5   // XIAO D4
 #define IMU_SCL_GPIO             GPIO_NUM_6   // XIAO D5
@@ -38,6 +44,68 @@ static imu_raw_sample_t s_latest = {0};
 static bool s_has_sample = false;
 
 
+#define IMU_STREAM_PORT 5006
+static QueueHandle_t s_stream_queue;
+
+static void imu_stream_task(void *arg)
+{
+    struct sockaddr_in target = {
+        .sin_family = AF_INET,
+        .sin_port = htons(IMU_STREAM_PORT),
+    };
+    target.sin_addr = *(const struct in_addr *)arg;
+
+    const uint32_t boot_id = esp_random();
+    int fd = -1;
+    uint32_t epoch = 0;
+    imu_raw_sample_t sample;
+    while (true) {
+        if (xQueueReceive(s_stream_queue, &sample, portMAX_DELAY) != pdTRUE) continue;
+        uint32_t current_epoch = wifi_manager_epoch();
+        bool connected = wifi_manager_connected();
+        if (fd >= 0 && (!connected || current_epoch != epoch)) {
+            close(fd);
+            fd = -1;
+        }
+        if (!connected) continue;
+        if (fd < 0) {
+            fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+            if (fd < 0) continue;
+            epoch = current_epoch;
+        }
+
+        char packet[128];
+        int size = snprintf(packet, sizeof(packet),
+                            "HK1 IMU %08" PRIx32 " %" PRIu32 " %" PRIi64
+                            " %d %d %d %d %d %d %d 0x%02X",
+                            boot_id, sample.seq, sample.t_us, sample.ax, sample.ay, sample.az,
+                            sample.gx, sample.gy, sample.gz, sample.temp, (unsigned)sample.status);
+        if (size > 0 && (size_t)size < sizeof(packet)) {
+            sendto(fd, packet, (size_t)size, MSG_DONTWAIT,
+                   (const struct sockaddr *)&target, sizeof(target));
+        }
+    }
+}
+
+static void imu_stream_start(void)
+{
+    if (CONFIG_HIKOROBO_IMU_STREAM_HOST[0] == '\0') return;
+    static struct in_addr address;
+    if (inet_pton(AF_INET, CONFIG_HIKOROBO_IMU_STREAM_HOST, &address) != 1) {
+        ESP_LOGE(TAG, "Invalid IMU stream destination");
+        return;
+    }
+
+    // A single-slot queue keeps the newest sample if transmission falls behind.
+    s_stream_queue = xQueueCreate(1, sizeof(imu_raw_sample_t));
+    if (s_stream_queue == NULL ||
+        xTaskCreate(imu_stream_task, "imu_stream", 4096, &address, 4, NULL) != pdPASS) {
+        if (s_stream_queue != NULL) vQueueDelete(s_stream_queue);
+        s_stream_queue = NULL;
+        ESP_LOGE(TAG, "Could not start IMU stream task");
+    }
+}
+
 static esp_err_t read_reg(uint8_t reg, uint8_t *out, size_t len)
 {
     return i2c_master_transmit_receive(s_dev, &reg, 1, out, len, IMU_TIMEOUT_MS);
@@ -59,6 +127,7 @@ static int16_t signed_le16(const uint8_t *p)
 static void imu_raw_print_task(void *arg)
 {
     (void)arg;
+    imu_stream_start();
     ESP_LOGI(TAG, "Header: IMU_RAW,t_us,ax,ay,az,gx,gy,gz,temp,status");
     while (true) {
         uint8_t status = 0;
@@ -94,6 +163,7 @@ static void imu_raw_print_task(void *arg)
             s_latest = sample;
             s_has_sample = true;
             taskEXIT_CRITICAL(&s_sample_mux);
+            if (s_stream_queue != NULL) xQueueOverwrite(s_stream_queue, &sample);
             printf("IMU_RAW,%" PRIi64 ",%d,%d,%d,%d,%d,%d,%d,0x%02X\n",
                    t_us, ax, ay, az, gx, gy, gz, temp, (unsigned)status);
         } else {

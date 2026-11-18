@@ -6,6 +6,7 @@ services:
 
     ports:
       - "127.0.0.1:8000:8000"
+      - "5006:5006/udp"
 
     volumes:
       - ./pc/src:/app/src:ro

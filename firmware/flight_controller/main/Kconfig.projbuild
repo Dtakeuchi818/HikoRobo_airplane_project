@@ -14,3 +14,14 @@ menu "HikoRobo Wi-Fi settings"
             DO NOT commit sdkconfig or share the built firmware publicly.
 
 endmenu
+
+menu "HikoRobo IMU telemetry"
+
+    config HIKOROBO_IMU_STREAM_HOST
+        string "Ground PC IPv4 address (UDP port 5006)"
+        default ""
+        help
+            IPv4 address of the ground PC on the Wi-Fi network.
+            An empty value disables IMU streaming.
+
+endmenu
