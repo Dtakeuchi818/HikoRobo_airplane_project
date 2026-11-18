@@ -74,6 +74,21 @@ static void complementary_update(double q[4], const double accel[3], double tau,
     }
 }
 
+static void attitude_to_euler(const double q[4], imu_euler_t *out)
+{
+    const double w = q[0], x = q[1], y = q[2], z = q[3];
+    const double sin_pitch = 2*(w*y - z*x);
+    out->pitch_deg = asin(clamp(sin_pitch, -1, 1)) / radians_per_degree;
+    if (fabs(sin_pitch) >= 1 - 1e-12) {
+        // At the pole, preserve the orientation with roll fixed at zero.
+        out->roll_deg = 0;
+        out->yaw_deg = atan2(2*(w*z - x*y), 1 - 2*(x*x + z*z)) / radians_per_degree;
+    } else {
+        out->roll_deg = atan2(2*(w*x + y*z), 1 - 2*(x*x + y*y)) / radians_per_degree;
+        out->yaw_deg = atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z)) / radians_per_degree;
+    }
+}
+
 bool imu_attitude_update(imu_attitude_t *state, const imu_attitude_config_t *config,
                          int64_t t_us, const double accel_mps2[3], const double gyro_dps[3],
                          imu_euler_t *out)
@@ -82,7 +97,7 @@ bool imu_attitude_update(imu_attitude_t *state, const imu_attitude_config_t *con
     const bool use_accel = length >= 0.8*gravity_mps2 && length <= 1.2*gravity_mps2;
     const int64_t elapsed = t_us - state->last_us;
     if (state->initialized && elapsed <= 0) return false;
-    if (!state->initialized || elapsed > 500000) {
+    if (!state->initialized || elapsed > IMU_ATTITUDE_GAP_US) {
         state->initialized = false;
         if (!use_accel) return false;
         init_attitude(state, accel_mps2);
@@ -110,9 +125,19 @@ bool imu_attitude_update(imu_attitude_t *state, const imu_attitude_config_t *con
         }
     }
     state->last_us = t_us;
-    const double w = state->q[0], x = state->q[1], y = state->q[2], z = state->q[3];
-    out->roll_deg = atan2(2*(w*x + y*z), 1 - 2*(x*x + y*y)) / radians_per_degree;
-    out->pitch_deg = asin(clamp(2*(w*y - z*x), -1, 1)) / radians_per_degree;
-    out->yaw_deg = atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z)) / radians_per_degree;
+    attitude_to_euler(state->q, out);
     return true;
+}
+
+void imu_attitude_relative(const double reference[4], const double current[4], imu_euler_t *out)
+{
+    const double a = reference[0], b = -reference[1], c = -reference[2], d = -reference[3];
+    const double w = current[0], x = current[1], y = current[2], z = current[3];
+    const double relative[] = {
+        a*w - b*x - c*y - d*z,
+        a*x + b*w + c*z - d*y,
+        a*y - b*z + c*w + d*x,
+        a*z + b*y - c*x + d*w,
+    };
+    attitude_to_euler(relative, out);
 }

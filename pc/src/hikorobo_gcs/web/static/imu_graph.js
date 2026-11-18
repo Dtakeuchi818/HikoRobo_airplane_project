@@ -6,7 +6,10 @@
   const hostInput = document.getElementById("host");
   const attitudeView = document.getElementById("imu-attitude-view");
   const attitudeViewState = document.getElementById("imu-attitude-view-state");
+  const referenceMode = document.getElementById("imu-reference-view");
+  const worldAxisLabel = document.getElementById("imu-world-axis-label");
   const attitudeFields = ["roll_deg", "pitch_deg", "yaw_deg"];
+  const relativeFields = attitudeFields.map(field => `relative_${field}`);
   const plots = [
     ["accel", ["ax", "ay", "az"]],
     ["gyro", ["gx", "gy", "gz"]],
@@ -23,8 +26,9 @@
     physical,
     range: null,
   }));
-  const readings = plots.flatMap(({fields}) =>
-    fields.map(field => [field, document.getElementById(`imu-live-${field}`)])
+  const attitudePlot = plots.at(-1);
+  const readings = plots.flatMap(plot =>
+    plot.fields.map((field, index) => [plot, index, document.getElementById(`imu-live-${field}`)])
   );
   const colors = ["#b32929", "#18724b", "#245bb8"];
   const windowUs = 10_000_000;
@@ -34,7 +38,20 @@
   let idleTimer;
   let attitudeLive = false;
 
-  function drawAttitude(sample) {
+  function axesFromEuler(sample, fields) {
+    const [roll, pitch, yaw] = fields.map(field => sample[field] * Math.PI / 180);
+    const cr = Math.cos(roll), sr = Math.sin(roll);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    // Columns of Rz(yaw) Ry(pitch) Rx(roll).
+    return [
+      [cy * cp, sy * cp, -sp],
+      [cy * sp * sr - sy * cr, sy * sp * sr + cy * cr, cp * sr],
+      [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr],
+    ];
+  }
+
+  function drawAttitude(sample, fields) {
     const width = attitudeView.clientWidth;
     const height = attitudeView.clientHeight;
     const pixelRatio = window.devicePixelRatio || 1;
@@ -71,19 +88,19 @@
     const origin = project([0, 0, 0]);
     const basis = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
 
-    function drawAxes(vectors, world) {
-      const length = world ? 1.65 : 1.06;
-      ctx.font = world ? "12px system-ui" : "600 12px system-ui";
+    function drawAxes(vectors, labelPrefix, length, dash) {
+      const sensor = dash.length === 0;
+      ctx.font = sensor ? "600 12px system-ui" : "12px system-ui";
       ctx.textBaseline = "middle";
       ctx.textAlign = "center";
       vectors.forEach((axis, i) => {
         const end = project(axis.map(value => value * length));
         const dx = end[0] - origin[0], dy = end[1] - origin[1];
         const screenLength = Math.hypot(dx, dy);
-        const label = `${world ? "W" : "IMU"} ${"XYZ"[i]}`;
+        const label = `${labelPrefix} ${"XYZ"[i]}`;
         ctx.strokeStyle = ctx.fillStyle = colors[i];
-        ctx.lineWidth = world ? 1.5 : 3;
-        ctx.setLineDash(world ? [5, 4] : []);
+        ctx.lineWidth = sensor ? 3 : 1.5;
+        ctx.setLineDash(dash);
         ctx.beginPath();
         ctx.moveTo(...origin);
         ctx.lineTo(...end);
@@ -108,26 +125,21 @@
       });
     }
 
-    drawAxes(basis, true);
-    if (!sample || !attitudeFields.every(field => Number.isFinite(sample[field]))) return;
-
-    const [roll, pitch, yaw] = attitudeFields.map(field => sample[field] * Math.PI / 180);
-    const cr = Math.cos(roll), sr = Math.sin(roll);
-    const cp = Math.cos(pitch), sp = Math.sin(pitch);
-    const cy = Math.cos(yaw), sy = Math.sin(yaw);
-    // Columns of Rz(yaw) Ry(pitch) Rx(roll) are the IMU axes in world coordinates.
-    drawAxes([
-      [cy * cp, sy * cp, -sp],
-      [cy * sp * sr - sy * cr, sy * sp * sr + cy * cr, cp * sr],
-      [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr],
-    ], false);
+    drawAxes(basis, "W", 1.65, [5, 4]);
+    if (sample) drawAxes(axesFromEuler(sample, fields), "IMU", 1.06, []);
   }
 
   function updateAttitudeView() {
     const latest = samples.at(-1);
-    const valid = latest && attitudeFields.every(field => Number.isFinite(latest[field]));
-    drawAttitude(attitudeLive && valid ? latest : null);
-    const message = !attitudeLive ? "姿勢データ待ち" : valid ? "受信中" : "姿勢データなし";
+    const relative = referenceMode.value === "relative";
+    const fields = relative ? relativeFields : attitudeFields;
+    const valid = attitudeLive && latest && fields.every(field => Number.isFinite(latest[field]));
+    drawAttitude(valid ? latest : null, fields);
+
+    const axisLabel = relative ? "設定した基準の軸" : "地面基準の軸";
+    if (worldAxisLabel.textContent !== axisLabel) worldAxisLabel.textContent = axisLabel;
+    const message = !attitudeLive ? "姿勢データ待ち" : valid ? "受信中"
+      : relative ? "設定した基準のデータなし" : "姿勢データなし";
     if (attitudeViewState.textContent !== message) attitudeViewState.textContent = message;
   }
 
@@ -199,9 +211,11 @@
         }
         const x = right - (latest - sample.t_us) * (right - left) / windowUs;
         const y = bottom - (sample[field] - low) * (bottom - top) / (step * 4);
-        const wrapped = (field === "roll_deg" || field === "yaw_deg")
+        const wrapped = (field.endsWith("roll_deg") || field.endsWith("yaw_deg"))
           && previous && Math.abs(sample[field] - previous[field]) > 180;
-        if (previous && !wrapped && sample.seq === previous.seq + 1 && sample.t_us - previous.t_us <= 500_000) {
+        const referenceChanged = field.startsWith("relative_") && previous
+          && sample.reference_seq !== previous.reference_seq;
+        if (previous && !wrapped && !referenceChanged && sample.seq === previous.seq + 1 && sample.t_us - previous.t_us <= 500_000) {
           ctx.lineTo(x, y);
         } else {
           ctx.moveTo(x, y);
@@ -216,8 +230,8 @@
 
   function redraw() {
     const latest = samples.at(-1);
-    for (const [field, element] of readings) {
-      element.textContent = latest?.[field] ?? "—";
+    for (const [plot, index, element] of readings) {
+      element.textContent = latest?.[plot.fields[index]] ?? "—";
     }
     for (const plot of plots) draw(plot);
     updateAttitudeView();
@@ -314,6 +328,10 @@
     max.addEventListener("input", updateRange);
     updateRange();
   }
+  referenceMode.addEventListener("change", () => {
+    attitudePlot.fields = referenceMode.value === "relative" ? relativeFields : attitudeFields;
+    redraw();
+  });
   updateAttitudeView();
   window.addEventListener("resize", redraw);
 })();

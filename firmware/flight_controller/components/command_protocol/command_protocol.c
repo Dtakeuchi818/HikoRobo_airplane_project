@@ -51,7 +51,8 @@ void command_protocol_handle(const char *command, char *response, size_t respons
             snprintf(response, response_size, "ERR IMU_NOT_READY");
         }
     } else if (strcmp(command, "GET_IMU_BIAS") == 0 || strncmp(command, "IMU_BIAS ", 9) == 0
-               || strcmp(command, "GET_IMU_ATT") == 0 || strncmp(command, "SET_IMU_ATT ", 12) == 0) {
+               || strcmp(command, "GET_IMU_ATT") == 0 || strncmp(command, "SET_IMU_ATT ", 12) == 0
+               || strncmp(command, "IMU_REF ", 8) == 0) {
         if (s_imu_control_handler != NULL) {
             s_imu_control_handler(command, response, response_size);
         } else {
@@ -60,7 +61,7 @@ void command_protocol_handle(const char *command, char *response, size_t respons
     } else if (strcmp(command, "GET_RATE") == 0) {
         snprintf(response, response_size, "OK RATE %d", atomic_load(&s_rate_hz));
     } else if (strcmp(command, "HELP") == 0) {
-        snprintf(response, response_size, "OK COMMANDS PING GET_STATUS GET_RATE SET_RATE GET_WIFI GET_IMU_RAW GET_IMU_BIAS IMU_BIAS GET_IMU_ATT SET_IMU_ATT HELP");
+        snprintf(response, response_size, "OK COMMANDS PING GET_STATUS GET_RATE SET_RATE GET_WIFI GET_IMU_RAW GET_IMU_BIAS IMU_BIAS GET_IMU_ATT SET_IMU_ATT IMU_REF HELP");
     } else if (strcmp(command, "GET_WIFI") == 0) {
         if (s_wifi_provider != NULL) {
             s_wifi_provider(response, response_size);

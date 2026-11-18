@@ -24,3 +24,8 @@ For `HK2` and `HK3`, each item also contains `ax_mps2`, `ay_mps2`, `az_mps2`, `g
 Bias commands use the existing command channel (UDP port 5005 or USB). `IMU_BIAS START +Z` begins sampling with the specified axis pointing up. The supported arguments are `+X`, `-X`, `+Y`, `-Y`, `+Z` and `-Z`. `IMU_BIAS RESET` clears the correction and cancels any measurement. `GET_IMU_BIAS` queries the state. Replies have the form `OK IMU_BIAS <state> <count> <applied>`. States are `IDLE`, `RUNNING`, `DONE`, `UNSTABLE` and `TIMEOUT`, and `applied` is 0 or 1.
 
 Attitude settings use the same command channel. `GET_IMU_ATT` reads the configured filter. `SET_IMU_ATT <filter> <tau_ms> <kp_milli> <ki_milli>` updates the settings as a group. The filter is `COMPLEMENTARY` or `MAHONY`. The integer ranges are 50–30000 for tau in milliseconds, 0–10000 for Kp × 1000, and 0–2000 for Ki × 1000. Both commands reply with `OK IMU_ATT <filter> <tau_ms> <kp_milli> <ki_milli>`.
+
+
+With a saved attitude reference, `HK4` extends the `HK3` fields by appending `reference_seq`, `relative_roll_deg`, `relative_pitch_deg` and `relative_yaw_deg`. The sequence is the sample used to capture the reference. Relative angles use the same Euler convention and ranges as the world-referenced angles. The WebSocket forwards these four fields with the world-referenced angles. After the reference is cleared, `HK3` resumes for valid attitudes.
+
+`IMU_REF SET` captures the latest valid attitude if it is at most 500 ms old. It replies with `OK IMU_REF <reference_seq>` or `ERR ATTITUDE_NOT_READY`. `IMU_REF CLEAR` always replies with `OK IMU_REF 0`. Attitude reinitialization and device restart also clear the reference.

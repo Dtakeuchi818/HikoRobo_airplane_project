@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>HikoRobo GCS</title>
-  <link rel="stylesheet" href="/static/style.css?v=9">
-  <script src="/static/app.js?v=7" defer></script>
-  <script src="/static/imu_graph.js?v=8" defer></script>
+  <link rel="stylesheet" href="/static/style.css?v=11">
+  <script src="/static/app.js?v=8" defer></script>
+  <script src="/static/imu_graph.js?v=10" defer></script>
 </head>
 <body>
 <main class="container">
@@ -161,16 +161,28 @@
         <small id="imu-attitude-state" role="status">設定未確認</small>
       </fieldset>
     </form>
+    <fieldset class="imu-graph-range" id="imu-reference-controls">
+      <legend>姿勢の基準</legend>
+      <button type="button" id="imu-reference-set">現在の姿勢を基準に設定</button>
+      <button type="button" id="imu-reference-clear">基準を解除</button>
+      <label>表示する基準
+        <select id="imu-reference-view">
+          <option value="world">地面基準</option>
+          <option value="relative">設定した基準</option>
+        </select>
+      </label>
+      <small id="imu-reference-state" role="status"></small>
+    </fieldset>
     <figure class="imu-graph imu-attitude-view">
       <figcaption>IMUの3D姿勢</figcaption>
       <div class="imu-attitude-legend">
-        <span><i class="world-axis-key" aria-hidden="true"></i>地面基準の軸</span>
+        <span><i class="world-axis-key" aria-hidden="true"></i><span id="imu-world-axis-label">地面基準の軸</span></span>
         <span><i class="sensor-axis-key" aria-hidden="true"></i>IMUの軸</span>
         <span id="imu-attitude-view-state" role="status">姿勢データ待ち</span>
       </div>
       <canvas id="imu-attitude-view" role="img"
-              aria-label="地面基準に対するIMUのXYZ軸の向き"></canvas>
-      <p class="hint">地面はXY平面、+Zは鉛直上向きです。地面基準のX・Yの向きは姿勢初期化時のヨーを基準にします。</p>
+              aria-label="選択した基準に対するIMUのXYZ軸の向き"></canvas>
+      <p class="hint">グリッドは選択した基準のXY平面です。地面基準では+Zが鉛直上向きです。</p>
     </figure>
     <figure class="imu-graph">
       <figcaption>

@@ -514,6 +514,7 @@ function clearBiasStatus() {
   biasPoll = null;
   biasStatus.textContent = "状態未確認";
   $("imu-attitude-state").textContent = "設定未確認";
+  $("imu-reference-state").textContent = "";
   updateBiasControls();
 }
 updateBiasControls();
@@ -558,3 +559,30 @@ attitudeForm.addEventListener("submit", event => {
   void configureAttitude(true);
 });
 $("imu-attitude-get").addEventListener("click", () => void configureAttitude(false));
+
+
+const referenceControls = $("imu-reference-controls");
+const referenceView = $("imu-reference-view");
+
+async function updateAttitudeReference(action) {
+  if (working || referenceControls.disabled) return;
+  referenceControls.disabled = true;
+  const status = $("imu-reference-state");
+  try {
+    const target = requestParameters();
+    const result = await post(`/api/imu-attitude/reference/${action}`, target);
+    if (JSON.stringify(requestParameters()) !== JSON.stringify(target)) return;
+    referenceView.value = result.reference_seq ? "relative" : "world";
+    referenceView.dispatchEvent(new Event("change"));
+    status.textContent = result.reference_seq ? "XIAOに基準を設定しました" : "XIAOの基準を解除しました";
+  } catch (error) {
+    status.textContent = error.message.includes("ATTITUDE_NOT_READY")
+      ? "XIAOに有効な姿勢がありません。少し待って再試行してください"
+      : error.message;
+  } finally {
+    referenceControls.disabled = false;
+  }
+}
+
+$("imu-reference-set").addEventListener("click", () => void updateAttitudeReference("set"));
+$("imu-reference-clear").addEventListener("click", () => void updateAttitudeReference("clear"));

@@ -65,6 +65,8 @@ typedef struct {
     imu_raw_sample_t raw;
     imu_measurement_t measurement;
     imu_euler_t attitude;
+    imu_euler_t relative;
+    uint32_t reference_seq;
     bool attitude_valid;
 } imu_stream_sample_t;
 
@@ -77,6 +79,13 @@ static imu_attitude_config_t s_attitude_config = {
     .ki_milli = 50,
 };
 static unsigned s_attitude_revision;
+static struct {
+    double latest_q[4];
+    int64_t latest_us;
+    uint32_t latest_seq;
+    double reference_q[4];
+    uint32_t reference_seq;  // Zero when no reference is set.
+} s_attitude_reference;
 static struct {
     int64_t deadline_us;
     int64_t last_sample_us;
@@ -188,11 +197,11 @@ static void imu_stream_task(void *arg)
 
         const imu_raw_sample_t sample = frame.raw;
         const imu_measurement_t *measurement = &frame.measurement;
-        char packet[224];
+        char packet[272];
         int size = snprintf(packet, sizeof(packet),
                             "%s IMU %08" PRIx32 " %" PRIu32 " %" PRIi64
                             " %d %d %d %d %d %d %d 0x%02X %.6f %.6f %.6f %.6f %.6f %.6f",
-                            frame.attitude_valid ? "HK3" : "HK2",
+                            frame.reference_seq ? "HK4" : frame.attitude_valid ? "HK3" : "HK2",
                             boot_id, sample.seq, sample.t_us, sample.ax, sample.ay, sample.az,
                             sample.gx, sample.gy, sample.gz, sample.temp, (unsigned)sample.status,
                             measurement->accel_mps2[0], measurement->accel_mps2[1],
@@ -201,6 +210,13 @@ static void imu_stream_task(void *arg)
         if (frame.attitude_valid && size > 0 && (size_t)size < sizeof(packet)) {
             const int extra = snprintf(packet + size, sizeof(packet) - (size_t)size, " %.6f %.6f %.6f",
                                        frame.attitude.roll_deg, frame.attitude.pitch_deg, frame.attitude.yaw_deg);
+            if (extra < 0) continue;
+            size += extra;
+        }
+        if (frame.reference_seq && size > 0 && (size_t)size < sizeof(packet)) {
+            const int extra = snprintf(packet + size, sizeof(packet) - (size_t)size,
+                                       " %" PRIu32 " %.6f %.6f %.6f", frame.reference_seq,
+                                       frame.relative.roll_deg, frame.relative.pitch_deg, frame.relative.yaw_deg);
             if (extra < 0) continue;
             size += extra;
         }
@@ -299,12 +315,25 @@ static void imu_raw_print_task(void *arg)
             }
             imu_stream_sample_t frame = {.raw = sample};
             convert_measurement(&sample, &bias, &frame.measurement);
+            const bool attitude_gap = attitude.last_us && t_us - attitude.last_us > IMU_ATTITUDE_GAP_US;
             if ((status & 0x03) == 0x03) {
                 frame.attitude_valid = imu_attitude_update(&attitude, &config, t_us,
                                                            frame.measurement.accel_mps2,
                                                            frame.measurement.gyro_dps,
                                                            &frame.attitude);
             }
+            double reference_q[4];
+            taskENTER_CRITICAL(&s_sample_mux);
+            if (attitude_gap) s_attitude_reference.reference_seq = 0;
+            if (frame.attitude_valid) {
+                memcpy(s_attitude_reference.latest_q, attitude.q, sizeof(attitude.q));
+                s_attitude_reference.latest_us = t_us;
+                s_attitude_reference.latest_seq = sample.seq;
+                frame.reference_seq = s_attitude_reference.reference_seq;
+                memcpy(reference_q, s_attitude_reference.reference_q, sizeof(reference_q));
+            }
+            taskEXIT_CRITICAL(&s_sample_mux);
+            if (frame.reference_seq) imu_attitude_relative(reference_q, attitude.q, &frame.relative);
             if (s_stream_queue != NULL) xQueueOverwrite(s_stream_queue, &frame);
             printf("IMU_RAW,%" PRIi64 ",%d,%d,%d,%d,%d,%d,%d,0x%02X\n",
                    t_us, ax, ay, az, gx, gy, gz, temp, (unsigned)status);
@@ -518,8 +547,36 @@ static bool parse_attitude_config(const char *args, imu_attitude_config_t *confi
     return config->tau_ms >= 50;
 }
 
+static void handle_reference_command(const char *command, char *reply, size_t capacity)
+{
+    const bool set = strcmp(command, "IMU_REF SET") == 0;
+    if (!set && strcmp(command, "IMU_REF CLEAR") != 0) {
+        snprintf(reply, capacity, "ERR BAD_ARGUMENT");
+        return;
+    }
+
+    taskENTER_CRITICAL(&s_sample_mux);
+    const bool ready = s_attitude_reference.latest_seq
+        && esp_timer_get_time() - s_attitude_reference.latest_us <= IMU_ATTITUDE_GAP_US;
+    if (set && ready) {
+        memcpy(s_attitude_reference.reference_q, s_attitude_reference.latest_q,
+               sizeof(s_attitude_reference.reference_q));
+        s_attitude_reference.reference_seq = s_attitude_reference.latest_seq;
+    } else if (!set) {
+        s_attitude_reference.reference_seq = 0;
+    }
+    const uint32_t seq = s_attitude_reference.reference_seq;
+    taskEXIT_CRITICAL(&s_sample_mux);
+    if (set && !ready) snprintf(reply, capacity, "ERR ATTITUDE_NOT_READY");
+    else snprintf(reply, capacity, "OK IMU_REF %" PRIu32, seq);
+}
+
 void imu_monitor_handle_control_command(const char *command, char *reply, size_t capacity)
 {
+    if (strncmp(command, "IMU_REF ", 8) == 0) {
+        handle_reference_command(command, reply, capacity);
+        return;
+    }
     const bool set_attitude = strncmp(command, "SET_IMU_ATT ", 12) == 0;
     if (!set_attitude && strcmp(command, "GET_IMU_ATT") != 0) {
         handle_bias_command(command, reply, capacity);

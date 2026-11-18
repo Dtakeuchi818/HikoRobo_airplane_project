@@ -173,3 +173,15 @@ def set_imu_attitude(request: ImuAttitudeRequest):
     return imu_attitude_command(
         request, f"SET_IMU_ATT {request.filter} {request.tau_ms} {request.kp_milli} {request.ki_milli}"
     )
+
+
+@app.post("/api/imu-attitude/reference/{action}", tags=["IMU"])
+def update_attitude_reference(action: Literal["set", "clear"], request: TargetRequest):
+    result = execute_command(request, f"IMU_REF {action.upper()}", expected="OK IMU_REF ")
+    match = re.fullmatch(r"OK IMU_REF ([0-9]{1,10})", result["reply"])
+    if not match:
+        raise HTTPException(status_code=502, detail="姿勢基準の応答形式が不正です")
+    seq = int(match[1])
+    if (action == "clear" and seq != 0) or (action == "set" and not 1 <= seq <= 0xFFFFFFFF):
+        raise HTTPException(status_code=502, detail="姿勢基準の連番が不正です")
+    return {"reference_seq": seq}
