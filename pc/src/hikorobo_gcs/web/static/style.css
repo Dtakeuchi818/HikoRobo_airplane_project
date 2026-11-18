@@ -365,3 +365,8 @@ footer a {color:#246eaa;}
 .imu-graph-readings span:nth-of-type(1) { color: #b32929; }
 .imu-graph-readings span:nth-of-type(2) { color: #18724b; }
 .imu-graph-readings span:nth-of-type(3) { color: #245bb8; }
+
+.imu-graph-range { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 8px 0; }
+.imu-graph-range label { display: inline-flex; align-items: center; gap: 6px; }
+.imu-graph-range input[type="number"] { width: 8ch; }
+.imu-graph-range small { color: #b32929; }

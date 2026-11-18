@@ -5,10 +5,18 @@
   const state = document.getElementById("imu-graph-state");
   const hostInput = document.getElementById("host");
   const plots = [
-    [document.getElementById("imu-accel-graph"), ["ax", "ay", "az"]],
-    [document.getElementById("imu-gyro-graph"), ["gx", "gy", "gz"]],
-  ];
-  const readings = plots.flatMap(([, fields]) =>
+    ["accel", ["ax", "ay", "az"]],
+    ["gyro", ["gx", "gy", "gz"]],
+  ].map(([kind, fields]) => ({
+    canvas: document.getElementById(`imu-${kind}-graph`),
+    fixed: document.getElementById(`imu-${kind}-fixed`),
+    min: document.getElementById(`imu-${kind}-min`),
+    max: document.getElementById(`imu-${kind}-max`),
+    error: document.getElementById(`imu-${kind}-range-error`),
+    fields,
+    range: null,
+  }));
+  const readings = plots.flatMap(({fields}) =>
     fields.map(field => [field, document.getElementById(`imu-live-${field}`)])
   );
   const colors = ["#b32929", "#18724b", "#245bb8"];
@@ -18,7 +26,7 @@
   let missing = 0;
   let idleTimer;
 
-  function draw(canvas, fields) {
+  function draw({canvas, fields, range}) {
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     const ratio = window.devicePixelRatio || 1;
@@ -30,13 +38,18 @@
     if (right <= left) return;
 
     let low = 0, high = 0;
-    for (const sample of samples) {
-      for (const field of fields) {
-        low = Math.min(low, sample[field]);
-        high = Math.max(high, sample[field]);
+    if (range) {
+      [low, high] = range;
+    } else {
+      for (const sample of samples) {
+        for (const field of fields) {
+          low = Math.min(low, sample[field]);
+          high = Math.max(high, sample[field]);
+        }
       }
+      high = low + 4 * Math.max(1, Math.ceil((high - low) / 4));
     }
-    const step = Math.max(1, Math.ceil((high - low) / 4));
+    const step = (high - low) / 4;
     const latest = samples.at(-1)?.t_us ?? 0;
     ctx.font = "11px system-ui";
     ctx.fillStyle = "#526579";
@@ -59,6 +72,10 @@
     }
     ctx.stroke();
 
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(left, top, right - left, bottom - top);
+    ctx.clip();
     fields.forEach((field, index) => {
       ctx.strokeStyle = colors[index];
       ctx.fillStyle = colors[index];
@@ -78,6 +95,7 @@
       }
       ctx.stroke();
     });
+    ctx.restore();
   }
 
   function redraw() {
@@ -85,7 +103,7 @@
     for (const [field, element] of readings) {
       element.textContent = latest?.[field] ?? "—";
     }
-    for (const [canvas, fields] of plots) draw(canvas, fields);
+    for (const plot of plots) draw(plot);
   }
 
   function stop(label) {
@@ -146,6 +164,28 @@
   hostInput.addEventListener("change", () => {
     if (socket) stop("接続先が変更されました");
   });
+  for (const plot of plots) {
+    const {fixed, min, max, error} = plot;
+    function updateRange() {
+      min.disabled = max.disabled = !fixed.checked;
+      error.textContent = "";
+      if (!fixed.checked) {
+        plot.range = null;
+      } else {
+        const low = min.valueAsNumber;
+        const high = max.valueAsNumber;
+        if (!min.validity.valid || !max.validity.valid || low >= high) {
+          error.textContent = "−32768〜32767の整数で、最小値を最大値より小さくしてください";
+          return;
+        }
+        plot.range = [low, high];
+      }
+      draw(plot);
+    }
+    fixed.addEventListener("change", updateRange);
+    min.addEventListener("input", updateRange);
+    max.addEventListener("input", updateRange);
+    updateRange();
+  }
   window.addEventListener("resize", redraw);
-  redraw();
 })();

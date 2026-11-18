@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>HikoRobo GCS</title>
-  <link rel="stylesheet" href="/static/style.css?v=7">
+  <link rel="stylesheet" href="/static/style.css?v=8">
   <script src="/static/app.js?v=5" defer></script>
-  <script src="/static/imu_graph.js?v=2" defer></script>
+  <script src="/static/imu_graph.js?v=3" defer></script>
 </head>
 <body>
 <main class="container">
@@ -129,6 +129,13 @@
           <span>Z <strong id="imu-live-az">—</strong></span>
         </div>
       </figcaption>
+      <fieldset class="imu-graph-range" aria-label="加速度の縦軸">
+        <legend>縦軸</legend>
+        <label><input id="imu-accel-fixed" type="checkbox"> 範囲を固定</label>
+        <label>最小値 <input id="imu-accel-min" type="number" value="-32768" min="-32768" max="32767" step="1" required disabled></label>
+        <label>最大値 <input id="imu-accel-max" type="number" value="32767" min="-32768" max="32767" step="1" required disabled></label>
+        <small id="imu-accel-range-error" role="status"></small>
+      </fieldset>
       <canvas id="imu-accel-graph" role="img" aria-label="加速度3軸の直近10秒"></canvas>
     </figure>
     <figure class="imu-graph">
@@ -141,6 +148,13 @@
           <span>Z <strong id="imu-live-gz">—</strong></span>
         </div>
       </figcaption>
+      <fieldset class="imu-graph-range" aria-label="角速度の縦軸">
+        <legend>縦軸</legend>
+        <label><input id="imu-gyro-fixed" type="checkbox"> 範囲を固定</label>
+        <label>最小値 <input id="imu-gyro-min" type="number" value="-32768" min="-32768" max="32767" step="1" required disabled></label>
+        <label>最大値 <input id="imu-gyro-max" type="number" value="32767" min="-32768" max="32767" step="1" required disabled></label>
+        <small id="imu-gyro-range-error" role="status"></small>
+      </fieldset>
       <canvas id="imu-gyro-graph" role="img" aria-label="角速度3軸の直近10秒"></canvas>
     </figure>
     <p class="hint">横軸は最新サンプルからの経過秒数。受信が途切れた区間は線を結びません。</p>
