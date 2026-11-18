@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>HikoRobo GCS</title>
+  <link rel="stylesheet" href="/static/style.css?v=4">
+  <script src="/static/app.js?v=4" defer></script>
+</head>
+<body>
+<main class="container">
+  <header class="masthead">
+    <div><div class="eyebrow">HIKOROBO / GROUND CONTROL STATION</div>
+      <h1>HikoRobo <span>GCS</span></h1>
+      <p class="subtitle">XIAO ESP32S3 Plus — Communication &amp; Diagnostics</p>
+    </div>
+    <div class="status" id="link-status" role="status"><span class="dot"></span><span id="status-label">未接続</span></div>
+  </header>
+  <section class="card" aria-labelledby="connection-title">
+    <div class="section-head"><h2 id="connection-title">接続・通信設定</h2><span class="hint" id="server-state">FastAPIへ接続中…</span></div>
+    <div class="transport-tabs" role="group" aria-label="通信方式">
+      <label class="radio-tab"><input type="radio" name="transport" value="udp" checked> Wi-Fi / UDP</label>
+      <label class="radio-tab"><input type="radio" name="transport" value="usb">USB Serial</label>
+    </div>
+    <div id="udp-fields">
+      <div class="fields">
+        <label for="host">XIAO IPアドレス<input id="host" value="192.168.8.217" placeholder="10.42.0.162" spellcheck="false"></label>
+        <label for="port">UDPポート<input id="port" type="number" min="1" max="65535" step="1" value="5005"></label>
+        <label for="timeout">応答タイムアウト [秒]<input id="timeout" type="number" min="0.1" max="3" step="0.1" value="1.0"></label>
+      </div>
+      <div class="inline-row discover-row"><label for="broadcast">探索用ブロードキャストIP<input id="broadcast" value="192.168.8.255" spellcheck="false"></label><button type="button" id="discover">XIAOを探索</button></div>
+    </div>
+    <div id="usb-fields" hidden>
+      <div class="fields usb-fields">
+        <label for="serial-port">USBシリアルポート<input id="serial-port" value="/dev/ttyACM0" list="serial-device-list" spellcheck="false"><datalist id="serial-device-list"></datalist></label>
+        <label for="baudrate">通信速度 [baud]<select id="baudrate"><option value="115200" selected>115200</option><option value="230400">230400</option><option value="57600">57600</option></select></label>
+        <label for="usb-timeout">応答タイムアウト [秒]<input id="usb-timeout" type="number" min="0.1" max="3" step="0.1" value="1.0"></label>
+      </div>
+      <div class="inline-row"><button type="button" id="refresh-ports">USBポート一覧を更新</button><span class="hint" id="serial-hint">DockerからUSBデバイスを見せる設定が必要です。</span></div>
+    </div>
+    <div class="action-row"><button type="button" id="connect" class="primary">接続確認</button><button type="button" id="disconnect">切断</button><span class="hint" id="connection-detail">UDPはPING応答をもって接続を確認します。</span></div>
+  </section>
+
+  <section class="card" aria-labelledby="monitor-title">
+    <div class="section-head"><h2 id="monitor-title">接続状態監視</h2><span class="hint">PINGによる定期確認</span></div>
+    <div class="monitor-summary">
+      <div class="stat"><span>最新RTT</span><strong id="live-rtt">—</strong></div>
+      <div class="stat"><span>最終応答時刻</span><strong id="last-ok">—</strong></div>
+      <div class="stat"><span>連続失敗</span><strong id="fail-streak">0</strong></div>
+    </div>
+    <div class="inline-row monitor-controls">
+      <label class="check-label"><input type="checkbox" id="monitor-enabled" checked> 接続後に自動監視</label>
+      <label for="monitor-interval">監視間隔 [秒]<select id="monitor-interval"><option value="2">2</option><option value="3" selected>3</option><option value="5">5</option><option value="10">10</option></select></label>
+      <button type="button" id="probe-now">今すぐ確認</button>
+    </div>
+    <p class="note">PING応答が1回失敗すると「通信不安定」、3回連続で失敗すると「応答なし」と表示します。監視はブラウザを開いている間だけ動きます。</p>
+  </section>
+
+  <section class="card" aria-labelledby="command-title">
+    <div class="section-head"><h2 id="command-title">コマンド操作</h2><span class="hint">既存のHikoRoboコマンド</span></div>
+    <div class="commands">
+      <button type="button" data-command="PING">PING</button>
+      <button type="button" data-command="GET_STATUS">GET_STATUS</button>
+      <button type="button" data-command="GET_WIFI">GET_WIFI</button>
+      <button type="button" data-command="GET_RATE">GET_RATE</button>
+    </div>
+    <div class="rate-control"><div><label for="rate">テスト用RATE（1〜500）<input id="rate" type="number" min="1" max="500" step="1" value="100"></label></div><button type="button" id="set-rate">SET_RATE</button></div>
+    <p class="note">RATEはXIAO内部のテスト変数です。IMUやS.BUSの測定周期ではありません。</p>
+  </section>
+
+  <section class="card" id="quality-card" aria-labelledby="quality-title">
+    <div class="section-head"><h2 id="quality-title">UDPネットワーク品質測定</h2><span class="hint">PINGによる要求・応答試験</span></div>
+    <div class="inline-row quality-controls">
+      <label for="quality-count">試行回数<input id="quality-count" type="number" min="5" max="100" step="1" value="30"></label>
+      <label for="quality-interval">送信間隔 [ms]<input id="quality-interval" type="number" min="50" max="1000" step="50" value="200"></label>
+      <button type="button" class="primary" id="run-quality">測定開始</button>
+      <button type="button" id="export-csv" disabled>CSV保存</button>
+    </div>
+    <div class="monitor-summary quality-summary">
+      <div class="stat"><span>応答なし率</span><strong id="quality-loss">—</strong></div>
+      <div class="stat"><span>RTT 中央値</span><strong id="quality-median">—</strong></div>
+      <div class="stat"><span>RTT P95</span><strong id="quality-p95">—</strong></div>
+      <div class="stat"><span>RTT変動</span><strong id="quality-jitter">—</strong></div>
+    </div>
+    <div class="chart-container"><canvas id="quality-chart" role="img" aria-label="UDP PING往復時間の推移"></canvas></div>
+    <p class="note" id="quality-result">未測定です。30回程度のPING試験から始めてください。</p>
+    <p class="note">応答なし率はPINGへの未応答割合で、厳密な一方向パケット損失率ではありません。RTT変動は、連続する成功試行のRTT差の絶対値の平均です。RSSI測定ではありません。</p>
+  </section>
+
+  <section class="card results" aria-labelledby="result-title"><div class="section-head"><h2 id="result-title">直近の応答</h2><span id="rtt" class="hint">RTT: —</span></div><div class="latest" id="latest-result" role="status">接続確認から始めてください。</div></section>
+  <section class="card" aria-labelledby="logs-title"><div class="section-head"><h2 id="logs-title">通信ログ</h2><div class="inline-row"><button type="button" id="save-log" class="subtle">ログ保存</button><button type="button" id="clear-log" class="subtle">クリア</button></div></div><div class="log" id="log" role="log" aria-live="polite"></div><p class="note">直近300件を表示します。監視PINGはログを増やさず、状態欄だけ更新します。</p></section>
+  <footer>HikoRobo GCS · <a href="/docs" target="_blank" rel="noopener">FastAPI Docs</a> · <a href="/api/health" target="_blank" rel="noopener">Health</a></footer>
+</main>
+</body>
+</html>

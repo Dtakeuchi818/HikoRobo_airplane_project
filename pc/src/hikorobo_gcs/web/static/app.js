@@ -18,6 +18,9 @@ function setWorking(value) {
   // Measuring RTT is a Wi-Fi/UDP diagnostic only.
   if (!value && mode() === "usb") $("run-quality").disabled = true;
   if (!value && mode() === "udp") $("run-quality").disabled = false;
+  $("imu-start").disabled = value || imuRunning;
+  $("imu-stop").disabled = value || !imuRunning;
+  $("imu-csv").disabled = value || imuRows.length === 0;
 }
 function logLine(kind, message) {
   const line = `[${new Date().toLocaleTimeString("ja-JP",{hour12:false})}] ${message}`;
@@ -32,7 +35,7 @@ function logLine(kind, message) {
 }
 function saveSettings() {
   const state = {};
-  for (const id of ["host","port","timeout","broadcast","serial-port","baudrate","usb-timeout","rate","quality-count","quality-interval","monitor-interval"]) state[id] = $(id).value;
+  for (const id of ["host","port","timeout","broadcast","serial-port","baudrate","usb-timeout","rate","quality-count","quality-interval","monitor-interval","imu-interval"]) state[id] = $(id).value;
   state.transport = mode();
   state.monitorEnabled = $("monitor-enabled").checked;
   try { localStorage.setItem("hikorobo-gcs-v4", JSON.stringify(state)); } catch (_) {}
@@ -334,3 +337,95 @@ for(const id of ["host","port","timeout","broadcast","serial-port","baudrate","u
   });
 }
 fetch("/api/health").then(r=>r.json()).then(d=>{$("server-state").textContent=d.status==="ok"?"FastAPI正常稼働":"サーバー状態不明";}).catch(()=>{$("server-state").textContent="FastAPIに接続できません";});
+
+
+// --- IMU (GET_IMU_RAW over the existing UDP request/reply channel) ---
+let imuTimer = null, imuRunning = false, imuBusy = false, imuFailures = 0;
+let imuLastSeq = null, imuLastUpdateMs = 0, imuRows = [];
+const imuCsvFields = ["pc_utc","seq","t_us","ax","ay","az","gx","gy","gz","temp","status","rtt_ms"];
+
+function stopImuPolling() {
+  if (imuTimer !== null) clearInterval(imuTimer);
+  imuTimer = null;
+  imuRunning = false;
+  $("imu-start").disabled = false;
+  $("imu-stop").disabled = true;
+}
+function imuSetState(value) { $("imu-state").textContent = value; }
+function renderImu(result) {
+  const s = result.sample;
+  for (const key of ["ax","ay","az","gx","gy","gz","temp"]) {
+    $("imu-" + key).textContent = String(s[key]);
+  }
+  $("imu-status").textContent = "0x" + s.status.toString(16).toUpperCase().padStart(2,"0");
+  $("imu-seq").textContent = String(s.seq);
+  $("imu-t-us").textContent = String(s.t_us);
+  $("imu-rtt").textContent = result.rtt_ms.toFixed(2) + " ms";
+  $("imu-last").textContent = new Date().toLocaleTimeString("ja-JP", {hour12:false});
+  const repeated = imuLastSeq === s.seq;
+  imuLastSeq = s.seq;
+  if (!repeated) imuLastUpdateMs = Date.now();
+  imuSetState(repeated && Date.now() - imuLastUpdateMs > 2000
+    ? "注意: XIAO側のサンプル更新が2秒以上止まっています"
+    : repeated ? "取得成功（同一サンプル）" : "取得成功（更新あり）");
+  imuRows.push({pc_utc:new Date().toISOString(),...s,rtt_ms:result.rtt_ms});
+  if (imuRows.length > 1000) imuRows.shift();
+  $("imu-csv").disabled = false;
+}
+async function fetchImuRaw() {
+  if (imuBusy || working || probing) return;
+  if (mode() !== "udp") { stopImuPolling(); imuSetState("UDP通信を選択してください"); return; }
+  if (!connected) { stopImuPolling(); imuSetState("先に接続確認してください"); return; }
+  imuBusy = true;
+  try {
+    const result = await post("/api/get-imu-raw", requestParameters());
+    renderImu(result);
+    imuFailures = 0;
+  } catch (e) {
+    // A short PING/command may hold the backend's single-command lock; retry later.
+    if (e.status !== 409) {
+      imuFailures++;
+      imuSetState("取得失敗: " + e.message);
+      if (imuFailures >= 3 && imuRunning) {
+        stopImuPolling();
+        logLine("err", "IMU連続表示を停止しました: " + e.message);
+      }
+    }
+  } finally { imuBusy = false; }
+}
+function startImuPolling() {
+  if (imuRunning) return;
+  if (mode() !== "udp") { imuSetState("UDP通信を選択してください"); return; }
+  if (!connected) { imuSetState("先に接続確認してください"); return; }
+  const ms = Number($("imu-interval").value);
+  if (![100,200,500].includes(ms)) { imuSetState("更新頻度が不正です"); return; }
+  imuFailures = 0;
+  imuRunning = true;
+  $("imu-start").disabled = true;
+  $("imu-stop").disabled = false;
+  imuTimer = setInterval(fetchImuRaw, ms);
+  fetchImuRaw();
+}
+function exportImuCsv() {
+  if (!imuRows.length) return;
+  const lines = [imuCsvFields.join(","), ...imuRows.map(s => imuCsvFields.map(k=>csvEscape(s[k])).join(","))];
+  downloadText("hikorobo_imu_raw_" + new Date().toISOString().replaceAll(":","-") + ".csv",
+    lines.join("\r\n"), "text/csv;charset=utf-8");
+}
+$("imu-once").addEventListener("click", fetchImuRaw);
+$("imu-start").addEventListener("click", startImuPolling);
+$("imu-stop").addEventListener("click", stopImuPolling);
+$("imu-csv").addEventListener("click", exportImuCsv);
+$("imu-interval").addEventListener("change", () => {
+  saveSettings();
+  if (imuRunning) { stopImuPolling(); startImuPolling(); }
+});
+// Keep existing UI behavior while stopping IMU polling on disconnect/mode changes.
+$("disconnect").addEventListener("click", () => { stopImuPolling(); imuSetState("停止中"); });
+for (const radio of document.querySelectorAll('input[name="transport"]')) {
+  radio.addEventListener("change", () => { stopImuPolling(); $("imu-card").hidden=mode()!=="udp"; });
+}
+for (const id of ["host","port","timeout","serial-port","baudrate","usb-timeout"]) {
+  $(id).addEventListener("change", () => { stopImuPolling(); imuSetState("通信設定変更・再接続待ち"); });
+}
+$("imu-card").hidden=mode()!=="udp";

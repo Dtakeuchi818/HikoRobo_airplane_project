@@ -32,6 +32,12 @@ static i2c_master_bus_handle_t s_bus = NULL;
 static i2c_master_dev_handle_t s_dev = NULL;
 static bool s_started = false;
 
+// Protected snapshot avoids concurrent I2C access from the UDP task.
+static portMUX_TYPE s_sample_mux = portMUX_INITIALIZER_UNLOCKED;
+static imu_raw_sample_t s_latest = {0};
+static bool s_has_sample = false;
+
+
 static esp_err_t read_reg(uint8_t reg, uint8_t *out, size_t len)
 {
     return i2c_master_transmit_receive(s_dev, &reg, 1, out, len, IMU_TIMEOUT_MS);
@@ -74,6 +80,20 @@ static void imu_raw_print_task(void *arg)
             int16_t az = signed_le16(&raw[12]);
             // Timestamp is from ESP32's timer, NOT the IMU's internal timestamp.
             int64_t t_us = esp_timer_get_time();
+
+            // Store the same raw 7 values printed on the serial monitor.
+            // No unit conversion or filtering is applied.
+            imu_raw_sample_t sample = {
+                .t_us = t_us,
+                .ax = ax, .ay = ay, .az = az,
+                .gx = gx, .gy = gy, .gz = gz,
+                .temp = temp, .status = status,
+            };
+            taskENTER_CRITICAL(&s_sample_mux);
+            sample.seq = s_latest.seq + 1;
+            s_latest = sample;
+            s_has_sample = true;
+            taskEXIT_CRITICAL(&s_sample_mux);
             printf("IMU_RAW,%" PRIi64 ",%d,%d,%d,%d,%d,%d,%d,0x%02X\n",
                    t_us, ax, ay, az, gx, gy, gz, temp, (unsigned)status);
         } else {
@@ -168,4 +188,32 @@ cleanup:
         s_bus = NULL;
     }
     return err;
+}
+
+bool imu_monitor_get_latest(imu_raw_sample_t *out)
+{
+    if (out == NULL) return false;
+    bool ready;
+    taskENTER_CRITICAL(&s_sample_mux);
+    ready = s_has_sample;
+    if (ready) *out = s_latest;
+    taskEXIT_CRITICAL(&s_sample_mux);
+    return ready;
+}
+
+void imu_monitor_format_latest(char *reply, size_t capacity)
+{
+    if (reply == NULL || capacity == 0) return;
+    imu_raw_sample_t sample;
+    if (!imu_monitor_get_latest(&sample)) {
+        snprintf(reply, capacity, "ERR IMU_NOT_READY");
+        return;
+    }
+    // Simple, versioned-by-command ASCII reply; fits 128 byte command buffer.
+    snprintf(reply, capacity,
+             "OK IMU_RAW %" PRIu32 " %" PRIi64 " %d %d %d %d %d %d %d 0x%02X",
+             sample.seq, sample.t_us,
+             sample.ax, sample.ay, sample.az,
+             sample.gx, sample.gy, sample.gz,
+             sample.temp, (unsigned)sample.status);
 }

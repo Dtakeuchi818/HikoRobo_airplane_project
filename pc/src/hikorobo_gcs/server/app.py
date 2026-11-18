@@ -96,3 +96,20 @@ def get_rate(request: TargetRequest):
 @app.post("/api/set-rate", tags=["XIAO commands"])
 def set_rate(request: RateRequest):
     return execute_command(request, f"SET_RATE {request.rate}", expected=f"OK RATE {request.rate}")
+
+
+# GET_IMU_RAW uses the existing UDP 5005 command request/reply path.
+# It does not need any new Docker port mapping or an incoming UDP listener.
+from hikorobo_gcs.server.imu_raw_parser import parse_imu_raw_reply
+
+
+@app.post("/api/get-imu-raw", tags=["IMU"])
+def get_imu_raw(request: TargetRequest):
+    if request.transport != "udp":
+        raise HTTPException(status_code=422, detail="IMU生値の初期版はUDP通信で使用してください")
+    result = execute_command(request, "GET_IMU_RAW", expected="OK IMU_RAW ")
+    try:
+        result["sample"] = parse_imu_raw_reply(result["reply"])
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=f"IMU応答の形式が不正です: {exc}") from exc
+    return result

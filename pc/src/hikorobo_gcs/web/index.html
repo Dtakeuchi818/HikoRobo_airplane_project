@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>HikoRobo GCS</title>
-  <link rel="stylesheet" href="/static/style.css?v=4">
-  <script src="/static/app.js?v=4" defer></script>
+  <link rel="stylesheet" href="/static/style.css?v=5">
+  <script src="/static/app.js?v=5" defer></script>
 </head>
 <body>
 <main class="container">
@@ -67,6 +67,46 @@
     </div>
     <div class="rate-control"><div><label for="rate">テスト用RATE（1〜500）<input id="rate" type="number" min="1" max="500" step="1" value="100"></label></div><button type="button" id="set-rate">SET_RATE</button></div>
     <p class="note">RATEはXIAO内部のテスト変数です。IMUやS.BUSの測定周期ではありません。</p>
+  </section>
+
+
+  <section class="card" id="imu-card" aria-labelledby="imu-title">
+    <div class="section-head">
+      <h2 id="imu-title">IMU 生データ（LSM6DS3TR-C）</h2>
+      <span class="hint" id="imu-state" role="status">未取得</span>
+    </div>
+    <div class="inline-row imu-controls">
+      <label for="imu-interval">表示更新頻度
+        <select id="imu-interval">
+          <option value="500">2 Hz</option>
+          <option value="200" selected>5 Hz</option>
+          <option value="100">10 Hz</option>
+        </select>
+      </label>
+      <button type="button" id="imu-once">1回取得</button>
+      <button type="button" class="primary" id="imu-start">連続表示開始</button>
+      <button type="button" id="imu-stop" disabled>停止</button>
+      <button type="button" id="imu-csv" disabled>CSV保存</button>
+    </div>
+    <div class="imu-values">
+      <div class="stat"><span>加速度 X（raw）</span><strong id="imu-ax">—</strong></div>
+      <div class="stat"><span>加速度 Y（raw）</span><strong id="imu-ay">—</strong></div>
+      <div class="stat"><span>加速度 Z（raw）</span><strong id="imu-az">—</strong></div>
+      <div class="stat"><span>角速度 X（raw）</span><strong id="imu-gx">—</strong></div>
+      <div class="stat"><span>角速度 Y（raw）</span><strong id="imu-gy">—</strong></div>
+      <div class="stat"><span>角速度 Z（raw）</span><strong id="imu-gz">—</strong></div>
+      <div class="stat"><span>温度（raw）</span><strong id="imu-temp">—</strong></div>
+      <div class="stat"><span>STATUS_REG</span><strong id="imu-status">—</strong></div>
+    </div>
+    <div class="imu-meta">
+      <span>シーケンス: <strong id="imu-seq">—</strong></span>
+      <span>XIAO時刻: <strong id="imu-t-us">—</strong> µs</span>
+      <span>往復RTT: <strong id="imu-rtt">—</strong></span>
+      <span>最終取得: <strong id="imu-last">—</strong></span>
+    </div>
+    <p class="note">表示値はIMUの符号付き16bit生値です。物理単位への換算・フィルタ処理はしていません。
+      XIAOは約10 Hzで最新サンプルを更新し、この画面は選んだ頻度でその最新値をUDPコマンドから取得します。
+      全104 Hzサンプルの連続転送ではありません。</p>
   </section>
 
   <section class="card" id="quality-card" aria-labelledby="quality-title">
