@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>HikoRobo GCS</title>
-  <link rel="stylesheet" href="/static/style.css?v=6">
+  <link rel="stylesheet" href="/static/style.css?v=7">
   <script src="/static/app.js?v=5" defer></script>
-  <script src="/static/imu_graph.js?v=1" defer></script>
+  <script src="/static/imu_graph.js?v=2" defer></script>
 </head>
 <body>
 <main class="container">
@@ -119,15 +119,28 @@
       <button type="button" class="primary" id="imu-graph-toggle">ライブ表示開始</button>
       <span class="hint">接続設定のXIAO IPv4を使用</span>
     </div>
-    <div class="imu-graph-legend" aria-label="軸の凡例">
-      <span>X</span><span>Y</span><span>Z</span>
-    </div>
     <figure class="imu-graph">
-      <figcaption>加速度（raw counts）</figcaption>
+      <figcaption>
+        加速度（raw counts）
+        <div class="imu-graph-readings">
+          <small>最新受信値</small>
+          <span>X <strong id="imu-live-ax">—</strong></span>
+          <span>Y <strong id="imu-live-ay">—</strong></span>
+          <span>Z <strong id="imu-live-az">—</strong></span>
+        </div>
+      </figcaption>
       <canvas id="imu-accel-graph" role="img" aria-label="加速度3軸の直近10秒"></canvas>
     </figure>
     <figure class="imu-graph">
-      <figcaption>角速度（raw counts）</figcaption>
+      <figcaption>
+        角速度（raw counts）
+        <div class="imu-graph-readings">
+          <small>最新受信値</small>
+          <span>X <strong id="imu-live-gx">—</strong></span>
+          <span>Y <strong id="imu-live-gy">—</strong></span>
+          <span>Z <strong id="imu-live-gz">—</strong></span>
+        </div>
+      </figcaption>
       <canvas id="imu-gyro-graph" role="img" aria-label="角速度3軸の直近10秒"></canvas>
     </figure>
     <p class="hint">横軸は最新サンプルからの経過秒数。受信が途切れた区間は線を結びません。</p>

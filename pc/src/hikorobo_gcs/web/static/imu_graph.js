@@ -8,6 +8,9 @@
     [document.getElementById("imu-accel-graph"), ["ax", "ay", "az"]],
     [document.getElementById("imu-gyro-graph"), ["gx", "gy", "gz"]],
   ];
+  const readings = plots.flatMap(([, fields]) =>
+    fields.map(field => [field, document.getElementById(`imu-live-${field}`)])
+  );
   const colors = ["#b32929", "#18724b", "#245bb8"];
   const windowUs = 10_000_000;
   let socket = null;
@@ -78,6 +81,10 @@
   }
 
   function redraw() {
+    const latest = samples.at(-1);
+    for (const [field, element] of readings) {
+      element.textContent = latest?.[field] ?? "—";
+    }
     for (const [canvas, fields] of plots) draw(canvas, fields);
   }
 
