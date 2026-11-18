@@ -34,3 +34,36 @@ def test_imu_udp_to_websocket(monkeypatch, version):
                     "gx": 3, "gy": -2, "gz": 11, "temp": 0, "status": 3, **physical,
                 }]
             }
+
+
+def test_imu_bias_commands(monkeypatch):
+    from hikorobo_gcs.server import app as app_module
+
+    monkeypatch.setattr(imu_stream, "IMU_STREAM_PORT", 0)
+    commands = []
+
+    def execute(request, command, *, expected):
+        commands.append(command)
+        assert str(request.host) == "127.0.0.1"
+        assert expected == "OK IMU_BIAS "
+        replies = {
+            "IMU_BIAS START -Z": "OK IMU_BIAS RUNNING 0 0",
+            "GET_IMU_BIAS": "OK IMU_BIAS DONE 30 1",
+            "IMU_BIAS RESET": "OK IMU_BIAS IDLE 0 0",
+        }
+        return {"reply": replies[command]}
+
+    monkeypatch.setattr(app_module, "execute_command", execute)
+    with TestClient(app) as client:
+        target = {"host": "127.0.0.1"}
+        assert client.post("/api/imu-bias/start", json={**target, "axis": "+W"}).status_code == 422
+        assert client.post("/api/imu-bias/start", json={**target, "axis": "-Z"}).json() == {
+            "state": "RUNNING", "count": 0, "applied": False,
+        }
+        assert client.post("/api/imu-bias/status", json=target).json() == {
+            "state": "DONE", "count": 30, "applied": True,
+        }
+        assert client.post("/api/imu-bias/reset", json=target).json() == {
+            "state": "IDLE", "count": 0, "applied": False,
+        }
+    assert commands == ["IMU_BIAS START -Z", "GET_IMU_BIAS", "IMU_BIAS RESET"]

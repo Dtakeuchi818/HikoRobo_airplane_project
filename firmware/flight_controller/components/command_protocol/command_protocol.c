@@ -11,6 +11,12 @@ static atomic_int s_rate_hz = ATOMIC_VAR_INIT(100);
 static command_wifi_status_provider_t s_wifi_provider;
 
 static command_imu_raw_provider_t s_imu_provider;
+static command_imu_bias_handler_t s_imu_bias_handler;
+
+void command_protocol_set_imu_bias_handler(command_imu_bias_handler_t handler)
+{
+    s_imu_bias_handler = handler;
+}
 
 void command_protocol_set_imu_raw_provider(command_imu_raw_provider_t provider)
 {
@@ -44,10 +50,16 @@ void command_protocol_handle(const char *command, char *response, size_t respons
         } else {
             snprintf(response, response_size, "ERR IMU_NOT_READY");
         }
+    } else if (strcmp(command, "GET_IMU_BIAS") == 0 || strncmp(command, "IMU_BIAS ", 9) == 0) {
+        if (s_imu_bias_handler != NULL) {
+            s_imu_bias_handler(command, response, response_size);
+        } else {
+            snprintf(response, response_size, "ERR IMU_NOT_READY");
+        }
     } else if (strcmp(command, "GET_RATE") == 0) {
         snprintf(response, response_size, "OK RATE %d", atomic_load(&s_rate_hz));
     } else if (strcmp(command, "HELP") == 0) {
-        snprintf(response, response_size, "OK COMMANDS PING GET_STATUS GET_RATE SET_RATE GET_WIFI GET_IMU_RAW HELP");
+        snprintf(response, response_size, "OK COMMANDS PING GET_STATUS GET_RATE SET_RATE GET_WIFI GET_IMU_RAW GET_IMU_BIAS IMU_BIAS HELP");
     } else if (strcmp(command, "GET_WIFI") == 0) {
         if (s_wifi_provider != NULL) {
             s_wifi_provider(response, response_size);

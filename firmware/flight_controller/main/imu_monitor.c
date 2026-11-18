@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "driver/i2c_master.h"
 #include "esp_log.h"
@@ -48,7 +49,103 @@ static bool s_has_sample = false;
 // LSM6DS3TR-C datasheet sensitivities for ±2 g and ±250 dps.
 static const double ACCEL_MPS2_PER_COUNT = 0.061 / 1000.0 * 9.80665;
 static const double GYRO_DPS_PER_COUNT = 8.75 / 1000.0;
+#define IMU_BIAS_SAMPLE_COUNT 30
+#define IMU_BIAS_TIMEOUT_US 8000000
+#define IMU_GRAVITY_MPS2 9.80665
+
+typedef struct {
+    double accel[3];
+    double gyro[3];
+    bool applied;
+} imu_bias_t;
+
+typedef struct {
+    imu_raw_sample_t raw;
+    imu_measurement_t measurement;
+} imu_stream_sample_t;
+
+static imu_bias_t s_bias;
+static imu_bias_t s_latest_bias;
+static struct {
+    int64_t deadline_us;
+    int64_t last_sample_us;
+    unsigned count;
+    unsigned gravity_axis;
+    double expected_gravity;
+    int16_t min[6], max[6];
+    int32_t sum[6];
+    const char *state;
+} s_calibration = {.state = "IDLE"};
 static QueueHandle_t s_stream_queue;
+
+static void convert_measurement(const imu_raw_sample_t *raw, const imu_bias_t *bias,
+                                imu_measurement_t *out)
+{
+    *out = (imu_measurement_t){
+        .seq = raw->seq,
+        .t_us = raw->t_us,
+        .accel_mps2 = {
+            raw->ax * ACCEL_MPS2_PER_COUNT - bias->accel[0],
+            raw->ay * ACCEL_MPS2_PER_COUNT - bias->accel[1],
+            raw->az * ACCEL_MPS2_PER_COUNT - bias->accel[2],
+        },
+        .gyro_dps = {
+            raw->gx * GYRO_DPS_PER_COUNT - bias->gyro[0],
+            raw->gy * GYRO_DPS_PER_COUNT - bias->gyro[1],
+            raw->gz * GYRO_DPS_PER_COUNT - bias->gyro[2],
+        },
+        .bias_applied = bias->applied,
+    };
+}
+
+// The caller holds s_sample_mux for calibration state and bias updates.
+static void expire_calibration(int64_t now_us)
+{
+    if (s_calibration.deadline_us && now_us >= s_calibration.deadline_us) {
+        s_calibration.deadline_us = 0;
+        s_calibration.state = "TIMEOUT";
+    }
+}
+
+static void collect_calibration(const imu_raw_sample_t *raw)
+{
+    expire_calibration(raw->t_us);
+    if (!s_calibration.deadline_us || raw->t_us < s_calibration.deadline_us - IMU_BIAS_TIMEOUT_US
+        || (raw->status & 0x03) != 0x03) return;
+    if (s_calibration.count && raw->t_us - s_calibration.last_sample_us > 500000) {
+        s_calibration.deadline_us = 0;
+        s_calibration.state = "TIMEOUT";
+        return;
+    }
+    s_calibration.last_sample_us = raw->t_us;
+
+    const int16_t axes[] = {raw->ax, raw->ay, raw->az, raw->gx, raw->gy, raw->gz};
+    for (unsigned i = 0; i < 6; ++i) {
+        if (!s_calibration.count || axes[i] < s_calibration.min[i]) s_calibration.min[i] = axes[i];
+        if (!s_calibration.count || axes[i] > s_calibration.max[i]) s_calibration.max[i] = axes[i];
+        s_calibration.sum[i] += axes[i];
+    }
+    if (++s_calibration.count < IMU_BIAS_SAMPLE_COUNT) return;
+    s_calibration.deadline_us = 0;
+
+    imu_bias_t candidate = {.applied = true};
+    for (unsigned i = 0; i < 6; ++i) {
+        const bool accel = i < 3;
+        const double scale = accel ? ACCEL_MPS2_PER_COUNT : GYRO_DPS_PER_COUNT;
+        const double span = (s_calibration.max[i] - s_calibration.min[i]) * scale;
+        const double expected = i == s_calibration.gravity_axis ? s_calibration.expected_gravity : 0;
+        const double offset = s_calibration.sum[i] * scale / IMU_BIAS_SAMPLE_COUNT - expected;
+        const double limit = accel ? 1.0 : 5.0;
+        if (span > (accel ? 0.35 : 1.5) || offset < -limit || offset > limit) {
+            s_calibration.state = "UNSTABLE";
+            return;
+        }
+        if (accel) candidate.accel[i] = offset;
+        else candidate.gyro[i - 3] = offset;
+    }
+    s_bias = candidate;
+    s_calibration.state = "DONE";
+}
 
 static void imu_stream_task(void *arg)
 {
@@ -61,9 +158,9 @@ static void imu_stream_task(void *arg)
     const uint32_t boot_id = esp_random();
     int fd = -1;
     uint32_t epoch = 0;
-    imu_raw_sample_t sample;
+    imu_stream_sample_t frame;
     while (true) {
-        if (xQueueReceive(s_stream_queue, &sample, portMAX_DELAY) != pdTRUE) continue;
+        if (xQueueReceive(s_stream_queue, &frame, portMAX_DELAY) != pdTRUE) continue;
         uint32_t current_epoch = wifi_manager_epoch();
         bool connected = wifi_manager_connected();
         if (fd >= 0 && (!connected || current_epoch != epoch)) {
@@ -77,18 +174,17 @@ static void imu_stream_task(void *arg)
             epoch = current_epoch;
         }
 
+        const imu_raw_sample_t sample = frame.raw;
+        const imu_measurement_t *measurement = &frame.measurement;
         char packet[192];
         int size = snprintf(packet, sizeof(packet),
                             "HK2 IMU %08" PRIx32 " %" PRIu32 " %" PRIi64
                             " %d %d %d %d %d %d %d 0x%02X %.6f %.6f %.6f %.6f %.6f %.6f",
                             boot_id, sample.seq, sample.t_us, sample.ax, sample.ay, sample.az,
                             sample.gx, sample.gy, sample.gz, sample.temp, (unsigned)sample.status,
-                            sample.ax * ACCEL_MPS2_PER_COUNT,
-                            sample.ay * ACCEL_MPS2_PER_COUNT,
-                            sample.az * ACCEL_MPS2_PER_COUNT,
-                            sample.gx * GYRO_DPS_PER_COUNT,
-                            sample.gy * GYRO_DPS_PER_COUNT,
-                            sample.gz * GYRO_DPS_PER_COUNT);
+                            measurement->accel_mps2[0], measurement->accel_mps2[1],
+                            measurement->accel_mps2[2], measurement->gyro_dps[0],
+                            measurement->gyro_dps[1], measurement->gyro_dps[2]);
         if (size > 0 && (size_t)size < sizeof(packet)) {
             sendto(fd, packet, (size_t)size, MSG_DONTWAIT,
                    (const struct sockaddr *)&target, sizeof(target));
@@ -106,7 +202,7 @@ static void imu_stream_start(void)
     }
 
     // A single-slot queue keeps the newest sample if transmission falls behind.
-    s_stream_queue = xQueueCreate(1, sizeof(imu_raw_sample_t));
+    s_stream_queue = xQueueCreate(1, sizeof(imu_stream_sample_t));
     if (s_stream_queue == NULL ||
         xTaskCreate(imu_stream_task, "imu_stream", 4096, &address, 4, NULL) != pdPASS) {
         if (s_stream_queue != NULL) vQueueDelete(s_stream_queue);
@@ -159,8 +255,6 @@ static void imu_raw_print_task(void *arg)
             // Timestamp is from ESP32's timer, NOT the IMU's internal timestamp.
             int64_t t_us = esp_timer_get_time();
 
-            // Store the same raw 7 values printed on the serial monitor.
-            // No unit conversion or filtering is applied.
             imu_raw_sample_t sample = {
                 .t_us = t_us,
                 .ax = ax, .ay = ay, .az = az,
@@ -169,10 +263,17 @@ static void imu_raw_print_task(void *arg)
             };
             taskENTER_CRITICAL(&s_sample_mux);
             sample.seq = s_latest.seq + 1;
+            collect_calibration(&sample);
+            const imu_bias_t bias = s_bias;
             s_latest = sample;
+            s_latest_bias = bias;
             s_has_sample = true;
             taskEXIT_CRITICAL(&s_sample_mux);
-            if (s_stream_queue != NULL) xQueueOverwrite(s_stream_queue, &sample);
+            if (s_stream_queue != NULL) {
+                imu_stream_sample_t frame = {.raw = sample};
+                convert_measurement(&sample, &bias, &frame.measurement);
+                xQueueOverwrite(s_stream_queue, &frame);
+            }
             printf("IMU_RAW,%" PRIi64 ",%d,%d,%d,%d,%d,%d,%d,0x%02X\n",
                    t_us, ax, ay, az, gx, gy, gz, temp, (unsigned)status);
         } else {
@@ -295,4 +396,66 @@ void imu_monitor_format_latest(char *reply, size_t capacity)
              sample.ax, sample.ay, sample.az,
              sample.gx, sample.gy, sample.gz,
              sample.temp, (unsigned)sample.status);
+}
+
+bool imu_monitor_get_measurement(imu_measurement_t *out)
+{
+    if (out == NULL) return false;
+    taskENTER_CRITICAL(&s_sample_mux);
+    const bool ready = s_has_sample;
+    const imu_raw_sample_t raw = s_latest;
+    const imu_bias_t bias = s_latest_bias;
+    taskEXIT_CRITICAL(&s_sample_mux);
+    if (ready) convert_measurement(&raw, &bias, out);
+    return ready;
+}
+
+void imu_monitor_handle_bias_command(const char *command, char *reply, size_t capacity)
+{
+    const bool query = strcmp(command, "GET_IMU_BIAS") == 0;
+    const bool reset = strcmp(command, "IMU_BIAS RESET") == 0;
+    unsigned axis = 0;
+    double expected_gravity = 0;
+    if (!query && !reset) {
+        const char *prefix = "IMU_BIAS START ";
+        if (strncmp(command, prefix, strlen(prefix)) != 0) {
+            snprintf(reply, capacity, "ERR BAD_ARGUMENT");
+            return;
+        }
+        const char *direction = command + strlen(prefix);
+        if (strlen(direction) != 2 || (direction[0] != '+' && direction[0] != '-')
+            || direction[1] < 'X' || direction[1] > 'Z') {
+            snprintf(reply, capacity, "ERR BAD_ARGUMENT");
+            return;
+        }
+        axis = (unsigned)(direction[1] - 'X');
+        expected_gravity = direction[0] == '+' ? IMU_GRAVITY_MPS2 : -IMU_GRAVITY_MPS2;
+    }
+
+    const int64_t now = esp_timer_get_time();
+    taskENTER_CRITICAL(&s_sample_mux);
+    expire_calibration(now);
+    const char *error = NULL;
+    if (reset) {
+        s_bias = (imu_bias_t){0};
+        s_calibration.deadline_us = 0;
+        s_calibration.count = 0;
+        s_calibration.state = "IDLE";
+    } else if (!query) {
+        if (!s_has_sample || now - s_latest.t_us > 500000) {
+            error = "IMU_NOT_READY";
+        } else if (!s_calibration.deadline_us) {
+            memset(&s_calibration, 0, sizeof(s_calibration));
+            s_calibration.deadline_us = now + IMU_BIAS_TIMEOUT_US;
+            s_calibration.gravity_axis = axis;
+            s_calibration.expected_gravity = expected_gravity;
+            s_calibration.state = "RUNNING";
+        }
+    }
+    const char *state = s_calibration.state;
+    const unsigned count = s_calibration.count;
+    const unsigned applied = s_bias.applied;
+    taskEXIT_CRITICAL(&s_sample_mux);
+    if (error) snprintf(reply, capacity, "ERR %s", error);
+    else snprintf(reply, capacity, "OK IMU_BIAS %s %u %u", state, count, applied);
 }

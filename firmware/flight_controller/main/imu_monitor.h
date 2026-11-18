@@ -25,3 +25,16 @@ typedef struct {
 
 bool imu_monitor_get_latest(imu_raw_sample_t *out);
 void imu_monitor_format_latest(char *reply, size_t capacity);
+
+// Calibrated sensor-frame measurement. Acceleration includes gravity.
+typedef struct {
+    uint32_t seq;
+    int64_t t_us;
+    double accel_mps2[3];  // X, Y, Z
+    double gyro_dps[3];    // X, Y, Z
+    bool bias_applied;
+} imu_measurement_t;
+
+// Copy the latest measurement and its acquisition timestamp from task context.
+bool imu_monitor_get_measurement(imu_measurement_t *out);
+void imu_monitor_handle_bias_command(const char *command, char *reply, size_t capacity);

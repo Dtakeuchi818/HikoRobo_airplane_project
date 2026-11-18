@@ -160,6 +160,7 @@
         }
         samples.push(sample);
       }
+      if (!samples.length) return;
       const cutoff = samples.at(-1).t_us - windowUs;
       samples = samples.filter(sample => sample.t_us >= cutoff).slice(-2048);
       redraw();

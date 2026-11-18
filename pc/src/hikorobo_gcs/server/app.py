@@ -1,7 +1,9 @@
 """HikoRobo GCS command GUI, connection monitoring and IMU telemetry."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -111,3 +113,31 @@ def get_imu_raw(request: TargetRequest):
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"IMU応答の形式が不正です: {exc}") from exc
     return result
+
+
+class ImuBiasStartRequest(TargetRequest):
+    axis: Literal["+X", "-X", "+Y", "-Y", "+Z", "-Z"]
+
+
+def imu_bias_command(request: TargetRequest, command: str):
+    result = execute_command(request, command, expected="OK IMU_BIAS ")
+    match = re.fullmatch(r"OK IMU_BIAS (IDLE|RUNNING|DONE|UNSTABLE|TIMEOUT) ([0-9]{1,2}) ([01])",
+                         result["reply"])
+    if not match or int(match[2]) > 30:
+        raise HTTPException(status_code=502, detail="IMU補正状態の応答形式が不正です")
+    return {"state": match[1], "count": int(match[2]), "applied": match[3] == "1"}
+
+
+@app.post("/api/imu-bias/status", tags=["IMU"])
+def get_imu_bias_status(request: TargetRequest):
+    return imu_bias_command(request, "GET_IMU_BIAS")
+
+
+@app.post("/api/imu-bias/start", tags=["IMU"])
+def start_imu_bias(request: ImuBiasStartRequest):
+    return imu_bias_command(request, f"IMU_BIAS START {request.axis}")
+
+
+@app.post("/api/imu-bias/reset", tags=["IMU"])
+def reset_imu_bias(request: TargetRequest):
+    return imu_bias_command(request, "IMU_BIAS RESET")

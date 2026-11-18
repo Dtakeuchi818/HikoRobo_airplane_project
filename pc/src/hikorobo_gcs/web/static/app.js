@@ -14,13 +14,14 @@ function setConnection(label, css) {
 }
 function setWorking(value) {
   working = value;
-  document.querySelectorAll("button:not(#clear-log):not(#save-log):not(#export-csv)").forEach(b => b.disabled = value);
+  document.querySelectorAll("button:not(#clear-log):not(#save-log):not(#export-csv):not([id^=\"imu-bias-\"])").forEach(b => b.disabled = value);
   // Measuring RTT is a Wi-Fi/UDP diagnostic only.
   if (!value && mode() === "usb") $("run-quality").disabled = true;
   if (!value && mode() === "udp") $("run-quality").disabled = false;
   $("imu-start").disabled = value || imuRunning;
   $("imu-stop").disabled = value || !imuRunning;
   $("imu-csv").disabled = value || imuRows.length === 0;
+  updateBiasControls();
 }
 function logLine(kind, message) {
   const line = `[${new Date().toLocaleTimeString("ja-JP",{hour12:false})}] ${message}`;
@@ -429,3 +430,89 @@ for (const id of ["host","port","timeout","serial-port","baudrate","usb-timeout"
   $(id).addEventListener("change", () => { stopImuPolling(); imuSetState("通信設定変更・再接続待ち"); });
 }
 $("imu-card").hidden=mode()!=="udp";
+
+
+// Calibration is owned by the XIAO. Poll the same target that received START.
+let biasRequestBusy = false;
+let biasPoll = null;
+let biasTargetRevision = 0;
+const biasAxis = $("imu-bias-axis");
+const biasStatus = $("imu-bias-state");
+
+function updateBiasControls() {
+  biasAxis.disabled = working || biasRequestBusy || biasPoll !== null;
+  $("imu-bias-start").disabled = biasAxis.disabled || !biasAxis.value;
+  $("imu-bias-reset").disabled = working || biasRequestBusy;
+  $("imu-bias-query").disabled = working || biasRequestBusy;
+}
+
+function renderBiasStatus(result) {
+  const labels = {
+    IDLE: "未補正",
+    RUNNING: `XIAOで測定中 · ${result.count}/30`,
+    DONE: "測定完了",
+    UNSTABLE: "動きまたは軸のずれを検出しました。姿勢と軸を確認してください",
+    TIMEOUT: "有効なサンプルが揃わず測定を中止しました",
+  };
+  biasStatus.textContent = labels[result.state] + (result.applied ? " · 補正適用中" : "");
+}
+
+function scheduleBiasPoll(target, deadline) {
+  biasPoll = setTimeout(() => {
+    biasPoll = null;
+    if (Date.now() >= deadline) {
+      biasStatus.textContent = "測定結果を確認できませんでした。「状態を確認」を押してください";
+      updateBiasControls();
+    } else {
+      void runBiasCommand("status", target, deadline);
+    }
+  }, 400);
+}
+
+async function runBiasCommand(action, pollTarget = null, deadline = Date.now() + 12_000) {
+  if (biasRequestBusy) return;
+  clearTimeout(biasPoll);
+  biasPoll = null;
+  biasRequestBusy = true;
+  const revision = biasTargetRevision;
+  updateBiasControls();
+  try {
+    const target = pollTarget ?? requestParameters();
+    const body = action === "start" ? {...target, axis: biasAxis.value} : target;
+    const result = await post(`/api/imu-bias/${action}`, body);
+    if (revision !== biasTargetRevision) return;
+    renderBiasStatus(result);
+    if (result.state === "RUNNING") scheduleBiasPoll(target, deadline);
+  } catch (error) {
+    if (revision !== biasTargetRevision) return;
+    if (pollTarget && error.status === 409) {
+      scheduleBiasPoll(pollTarget, deadline);
+    } else {
+      biasStatus.textContent = `${error.message} · 必要に応じて「状態を確認」を押してください`;
+    }
+  } finally {
+    biasRequestBusy = false;
+    updateBiasControls();
+  }
+}
+
+biasAxis.addEventListener("change", updateBiasControls);
+for (const action of ["start", "reset", "query"]) {
+  $(`imu-bias-${action}`).addEventListener("click", () => {
+    void runBiasCommand(action === "query" ? "status" : action);
+  });
+}
+for (const id of ["host", "port", "serial-port", "baudrate"]) {
+  $(id).addEventListener("change", clearBiasStatus);
+}
+document.querySelectorAll('input[name="transport"]').forEach(input => {
+  input.addEventListener("change", clearBiasStatus);
+});
+function clearBiasStatus() {
+  ++biasTargetRevision;
+  clearTimeout(biasPoll);
+  biasPoll = null;
+  biasStatus.textContent = "状態未確認";
+  updateBiasControls();
+}
+updateBiasControls();
