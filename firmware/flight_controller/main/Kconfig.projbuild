@@ -15,6 +15,18 @@ menu "HikoRobo Wi-Fi settings"
 
 endmenu
 
+menu "HikoRobo S.BUS monitor"
+
+    config HIKOROBO_SBUS_MONITOR
+        bool "Boot into the S.BUS USB monitor"
+        default n
+        help
+            Read inverted S.BUS on XIAO D7 (GPIO44) and print raw channel
+            values over USB. This bench mode replaces the normal flight
+            controller startup, including its USB command server.
+
+endmenu
+
 menu "HikoRobo IMU telemetry"
 
     config HIKOROBO_IMU_STREAM_HOST

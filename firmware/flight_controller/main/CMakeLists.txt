@@ -3,6 +3,7 @@ idf_component_register(
         "main.c"
         "imu_monitor.c"
         "imu_attitude.c"
+        "sbus_monitor.c"
     INCLUDE_DIRS "."
     REQUIRES
         command_protocol
@@ -10,6 +11,8 @@ idf_component_register(
         udp_transport
         usb_transport
         esp_driver_i2c
+        esp_driver_uart
+        esp_driver_usb_serial_jtag
         lwip
         esp_hw_support
         esp_timer

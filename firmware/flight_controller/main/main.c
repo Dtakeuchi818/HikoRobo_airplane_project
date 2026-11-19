@@ -2,6 +2,8 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "imu_monitor.h"
+#include "sbus_monitor.h"
+#include "sdkconfig.h"
 #include "udp_transport.h"
 #include "usb_transport.h"
 #include "wifi_manager.h"
@@ -17,6 +19,11 @@ static void usb_task(void *arg)
 
 void app_main(void)
 {
+#ifdef CONFIG_HIKOROBO_SBUS_MONITOR
+    sbus_monitor_run();
+    return;
+#endif
+
     wifi_manager_start(); // Wi-Fi joins Ubuntu hotspot asynchronously.
     command_protocol_set_wifi_status_provider(wifi_manager_format_status);
     command_protocol_set_imu_raw_provider(imu_monitor_format_latest);
