@@ -8,6 +8,26 @@ from hikorobo_gcs.server import imu_stream
 from hikorobo_gcs.server.app import app
 
 
+def test_sbus_udp_to_websocket(monkeypatch):
+    monkeypatch.setattr(imu_stream, "IMU_STREAM_PORT", 0)
+    with TestClient(app) as client:
+        port = app.state.imu_receiver.transport.get_extra_info("sockname")[1]
+        with client.websocket_connect("/ws/sbus?host=127.0.0.1") as websocket:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
+                destination = ("127.0.0.1", port)
+                sender.sendto(b"HK1 IMU 14d1c6b9 42 4100000 -12 5 16384 3 -2 11 0 0x03", destination)
+                sender.sendto(b"HK1 SBUS 1 0 0 250 500 750 1000 1250 1500 2047", destination)
+            assert websocket.receive_json() == {
+                "samples": [{
+                    "channels": [0, 250, 500, 750, 1000, 1250, 1500, 2047],
+                    "lost": True,
+                    "failsafe": False,
+                }]
+            }
+    with pytest.raises(ValueError, match="11-bit range"):
+        imu_stream.parse_sbus_packet(b"HK1 SBUS 1 0 0 250 500 750 1000 1250 1500 2048")
+
+
 @pytest.mark.parametrize("version", [b"HK1", b"HK2", b"HK3", b"HK4"])
 def test_imu_udp_to_websocket(monkeypatch, version):
     raw = b" IMU 14d1c6b9 42 4100000 -12 5 16384 3 -2 11 0 0x03"

@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>HikoRobo GCS</title>
-  <link rel="stylesheet" href="/static/style.css?v=13">
+  <link rel="stylesheet" href="/static/style.css?v=14">
   <script src="/static/app.js?v=9" defer></script>
   <script src="/static/imu_graph.js?v=15" defer></script>
+  <script src="/static/sbus_graph.js" defer></script>
 </head>
 <body>
 <main class="container">
@@ -138,6 +139,17 @@
   <section class="card" aria-labelledby="logs-title"><div class="section-head"><h2 id="logs-title">通信ログ</h2><div class="inline-row"><button type="button" id="save-log" class="subtle">ログ保存</button><button type="button" id="clear-log" class="subtle">クリア</button></div></div><div class="log" id="log" role="log" aria-live="polite"></div><p class="note">直近300件を表示します。監視PINGはログを増やさず、状態欄だけ更新します。</p></section>
   </div>
   <div id="graphs-panel" role="tabpanel" aria-labelledby="graphs-tab" hidden>
+  <section class="card" aria-labelledby="sbus-title">
+    <div class="section-head">
+      <h2 id="sbus-title">S.BUS チャンネル</h2>
+      <span class="hint" id="sbus-state" role="status">停止中</span>
+    </div>
+    <div class="inline-row">
+      <button type="button" class="primary" id="sbus-toggle">ライブ表示開始</button>
+      <span class="hint">生値 0〜2047</span>
+    </div>
+    <div class="sbus-channels" id="sbus-channels"></div>
+  </section>
   <section class="card" aria-labelledby="imu-graph-title">
     <div class="section-head">
       <h2 id="imu-graph-title">IMU ライブ波形</h2>

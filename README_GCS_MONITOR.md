@@ -65,6 +65,16 @@ XIAOは補正済みの角速度と加速度を使って、現在のIMU読み取�
 
 [IMUストリームのプロトコル](shared/protocol/imu_stream_v1.md)
 
+## S.BUS ライブ表示
+
+1. XIAO D7（GPIO44）に S.BUS 信号を接続します。`menuconfig` で `HikoRobo S.BUS monitor` の `Boot into the S.BUS USB monitor` を無効にして通常起動に戻します。
+2. IMU と同じ `Ground PC IPv4 address` を使います。すでに IMU がライブ表示できる場合は設定済みです。ファームウェアを書き込み、GCS を `docker compose -f compose.gcs.host.yaml up -d --build gcs` で再ビルドします。
+3. ブラウザの「通信設定」で XIAO の IPv4 を指定し、「グラフ表示」→「S.BUS チャンネル」→「ライブ表示開始」を押します。
+
+CH1〜8 の生値（0〜2047）が横並びの棒グラフに表示されます。受信停止から約 1 秒で棒がクリアされます。
+
+S.BUS は IMU と同じ UDP 5006 に、ASCII の独立したデータグラムで配信されます。形式は `HK1 SBUS <lost> <failsafe> <ch1> ... <ch8>` です。両フラグは `0` または `1` です。
+
 ## USBも使用する場合
 
 `pc/requirements-gcs.txt` に `pyserial` を追加済み。以前のDockerfileがこのファイルを使うので、以下の `--build` で再構築する。

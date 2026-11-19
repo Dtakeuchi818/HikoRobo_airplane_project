@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import Field
 
 from hikorobo_gcs.server.imu_raw_parser import parse_imu_raw_reply
-from hikorobo_gcs.server.imu_stream import imu_lifespan, stream_imu
+from hikorobo_gcs.server.imu_stream import imu_lifespan, stream_imu, stream_sbus
 from hikorobo_gcs.server.udp_commands import (
     DiscoverRequest,
     QualityRequest,
@@ -23,6 +23,7 @@ from hikorobo_gcs.server.udp_commands import (
 
 app = FastAPI(title="HikoRobo GCS", version="0.4.0", lifespan=imu_lifespan)
 app.add_api_websocket_route("/ws/imu", stream_imu)
+app.add_api_websocket_route("/ws/sbus", stream_sbus)
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 

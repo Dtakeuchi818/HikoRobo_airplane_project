@@ -19,6 +19,7 @@
 #include "lwip/inet.h"
 #include "lwip/sockets.h"
 #include "sdkconfig.h"
+#include "telemetry.h"
 #include "wifi_manager.h"
 
 #define IMU_SDA_GPIO             GPIO_NUM_5   // XIAO D4
@@ -47,7 +48,6 @@ static imu_raw_sample_t s_latest = {0};
 static bool s_has_sample = false;
 
 
-#define IMU_STREAM_PORT 5006
 // LSM6DS3TR-C datasheet sensitivities for ±2 g and ±250 dps.
 static const double ACCEL_MPS2_PER_COUNT = 0.061 / 1000.0 * 9.80665;
 static const double GYRO_DPS_PER_COUNT = 8.75 / 1000.0;
@@ -172,7 +172,7 @@ static void imu_stream_task(void *arg)
 {
     struct sockaddr_in target = {
         .sin_family = AF_INET,
-        .sin_port = htons(IMU_STREAM_PORT),
+        .sin_port = htons(HIKOROBO_TELEMETRY_PORT),
     };
     target.sin_addr = *(const struct in_addr *)arg;
 

@@ -34,6 +34,6 @@ menu "HikoRobo IMU telemetry"
         default ""
         help
             IPv4 address of the ground PC on the Wi-Fi network.
-            An empty value disables IMU streaming.
+            An empty value disables IMU and S.BUS streaming.
 
 endmenu

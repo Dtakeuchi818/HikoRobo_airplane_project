@@ -1,4 +1,4 @@
-"""Receive versioned IMU telemetry and fan it out to local WebGUI clients."""
+"""Receive IMU and S.BUS telemetry and forward it to WebGUI clients."""
 
 from __future__ import annotations
 
@@ -49,21 +49,36 @@ def parse_imu_packet(packet: bytes) -> dict[str, int | float | str]:
     return {"boot_id": boot_id, **sample, **physical}
 
 
+def parse_sbus_packet(packet: bytes) -> dict:
+    if len(packet) > 64:
+        raise ValueError("S.BUS packet too long")
+    version, kind, lost, failsafe, *channels = packet.decode("ascii").split()
+    if (version, kind) != ("HK1", "SBUS") or lost not in ("0", "1") or failsafe not in ("0", "1"):
+        raise ValueError("invalid S.BUS header or flags")
+    if len(channels) != 8 or any(not re.fullmatch(r"[0-9]{1,4}", ch) for ch in channels):
+        raise ValueError("invalid S.BUS channels")
+    values = list(map(int, channels))
+    if any(value > 2047 for value in values):
+        raise ValueError("S.BUS channel outside 11-bit range")
+    return {"channels": values, "lost": lost == "1", "failsafe": failsafe == "1"}
+
+
 class ImuReceiver(asyncio.DatagramProtocol):
     def __init__(self) -> None:
-        self.subscribers: dict[asyncio.Queue, str] = {}
+        self.subscribers: dict[asyncio.Queue, tuple[str, str]] = {}
 
     def connection_made(self, transport: asyncio.DatagramTransport) -> None:
         self.transport = transport
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
         try:
-            sample = parse_imu_packet(data)
+            kind = "SBUS" if data.startswith(b"HK1 SBUS ") else "IMU"
+            sample = parse_sbus_packet(data) if kind == "SBUS" else parse_imu_packet(data)
         except ValueError:
             return
 
-        for queue, source in self.subscribers.items():
-            if addr[0] != source:
+        for queue, destination in self.subscribers.items():
+            if (addr[0], kind) != destination:
                 continue
             if queue.full():
                 queue.get_nowait()
@@ -84,6 +99,14 @@ async def imu_lifespan(app: FastAPI):
 
 
 async def stream_imu(websocket: WebSocket, host: str) -> None:
+    await stream_telemetry(websocket, host, "IMU", queue_size=64)
+
+
+async def stream_sbus(websocket: WebSocket, host: str) -> None:
+    await stream_telemetry(websocket, host, "SBUS", queue_size=1)
+
+
+async def stream_telemetry(websocket: WebSocket, host: str, kind: str, queue_size: int) -> None:
     try:
         source = str(IPv4Address(host))
     except ValueError:
@@ -91,8 +114,8 @@ async def stream_imu(websocket: WebSocket, host: str) -> None:
         return
 
     receiver = websocket.app.state.imu_receiver
-    queue: asyncio.Queue = asyncio.Queue(maxsize=64)
-    receiver.subscribers[queue] = source
+    queue: asyncio.Queue = asyncio.Queue(maxsize=queue_size)
+    receiver.subscribers[queue] = (source, kind)
     try:
         await websocket.accept()
         while True:

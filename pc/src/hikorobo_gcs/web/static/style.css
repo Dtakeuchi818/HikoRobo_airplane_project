@@ -409,3 +409,35 @@ footer a {color:#246eaa;}
 .imu-attitude-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .imu-attitude-legend i { width: 16px; border-top: 2px solid currentColor; }
 .imu-attitude-legend .world-axis-key { border-top-style: dashed; }
+
+.sbus-channels {
+  display:grid;
+  grid-template-columns:repeat(8,minmax(0,1fr));
+  gap:clamp(4px,1vw,16px);
+  margin-top:16px;
+  text-align:center;
+  font-size:clamp(.68rem,2.5vw,.9rem);
+  font-variant-numeric:tabular-nums;
+}
+
+.sbus-track {
+  display:flex;
+  align-items:flex-end;
+  width:min(100%,48px);
+  height:112px;
+  margin:6px auto;
+  overflow:hidden;
+  border:1px solid #c8d5e3;
+  border-radius:5px;
+  background:#edf2f8;
+}
+
+.sbus-bar {
+  width:100%;
+  height:0;
+  background:#1864ab;
+}
+
+.sbus-warning .sbus-bar {
+  background:#a64b00;
+}

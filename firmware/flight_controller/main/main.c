@@ -25,6 +25,10 @@ void app_main(void)
 #endif
 
     wifi_manager_start(); // Wi-Fi joins Ubuntu hotspot asynchronously.
+    esp_err_t sbus_err = sbus_stream_start();
+    if (sbus_err != ESP_OK) {
+        ESP_LOGE("APP", "S.BUS stream start failed: %s", esp_err_to_name(sbus_err));
+    }
     command_protocol_set_wifi_status_provider(wifi_manager_format_status);
     command_protocol_set_imu_raw_provider(imu_monitor_format_latest);
     command_protocol_set_imu_control_handler(imu_monitor_handle_control_command);
