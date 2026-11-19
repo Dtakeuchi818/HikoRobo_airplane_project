@@ -37,6 +37,9 @@
   let missing = 0;
   let idleTimer;
   let attitudeLive = false;
+  let azimuth = Math.PI / 5;
+  let elevation = Math.PI / 6;
+  let drag = null;
 
   function axesFromEuler(sample, fields) {
     const [roll, pitch, yaw] = fields.map(field => sample[field] * Math.PI / 180);
@@ -59,15 +62,15 @@
     attitudeView.height = Math.round(height * pixelRatio);
     const ctx = attitudeView.getContext("2d");
     ctx.scale(pixelRatio, pixelRatio);
-    const scale = Math.min(width, height) * 0.24;
-    const azimuth = Math.PI / 5, elevation = Math.PI / 6;
+    const scale = Math.min(width, height) * 0.21;
     const ca = Math.cos(azimuth), sa = Math.sin(azimuth);
     const ce = Math.cos(elevation), se = Math.sin(elevation);
 
     function project([x, y, z]) {
       const depth = x * sa + y * ca;
-      return [width / 2 + scale * (x * ca - y * sa),
-              height * 0.58 + scale * (depth * se - z * ce)];
+      // Screen right and screen up cross toward the camera.
+      return [width / 2 + scale * (y * sa - x * ca),
+              height / 2 + scale * (depth * se - z * ce)];
     }
 
     function line(from, to) {
@@ -298,6 +301,25 @@
       if (socket === current) stop("WebSocket切断");
     });
   }
+
+  attitudeView.addEventListener("pointerdown", event => {
+    if (event.button !== 0 || drag) return;
+    attitudeView.setPointerCapture(event.pointerId);
+    drag = {id: event.pointerId, x: event.clientX, y: event.clientY};
+  });
+  attitudeView.addEventListener("pointermove", event => {
+    if (drag?.id !== event.pointerId) return;
+    const radiansPerPixel = 0.01;
+    azimuth = (azimuth + (event.clientX - drag.x) * radiansPerPixel) % (2 * Math.PI);
+    elevation = Math.max(-Math.PI / 2, Math.min(Math.PI / 2,
+      elevation + (event.clientY - drag.y) * radiansPerPixel));
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    updateAttitudeView();
+  });
+  attitudeView.addEventListener("lostpointercapture", event => {
+    if (drag?.id === event.pointerId) drag = null;
+  });
 
   button.addEventListener("click", () => socket ? stop("停止中") : start());
   hostInput.addEventListener("change", () => {

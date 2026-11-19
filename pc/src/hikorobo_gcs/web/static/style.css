@@ -376,7 +376,11 @@ footer a {color:#246eaa;}
   border: 1px solid #d9e1e9;
   border-radius: 8px;
   background: #f7f9fc;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
+.imu-attitude-view canvas:active { cursor: grabbing; }
 .imu-attitude-legend {
   display: flex;
   flex-wrap: wrap;
