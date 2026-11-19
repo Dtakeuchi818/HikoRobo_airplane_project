@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>HikoRobo GCS</title>
-  <link rel="stylesheet" href="/static/style.css?v=12">
-  <script src="/static/app.js?v=8" defer></script>
-  <script src="/static/imu_graph.js?v=14" defer></script>
+  <link rel="stylesheet" href="/static/style.css?v=13">
+  <script src="/static/app.js?v=9" defer></script>
+  <script src="/static/imu_graph.js?v=15" defer></script>
 </head>
 <body>
 <main class="container">
@@ -18,6 +18,11 @@
     </div>
     <div class="status" id="link-status" role="status"><span class="dot"></span><span id="status-label">未接続</span></div>
   </header>
+  <div class="view-tabs" id="view-tabs" role="tablist" aria-label="表示項目">
+    <button type="button" id="communication-tab" role="tab" aria-controls="communication-panel" aria-selected="true">通信設定</button>
+    <button type="button" id="graphs-tab" role="tab" aria-controls="graphs-panel" aria-selected="false" tabindex="-1">グラフ表示</button>
+  </div>
+  <div id="communication-panel" role="tabpanel" aria-labelledby="communication-tab">
   <section class="card" aria-labelledby="connection-title">
     <div class="section-head"><h2 id="connection-title">接続・通信設定</h2><span class="hint" id="server-state">FastAPIへ接続中…</span></div>
     <div class="transport-tabs" role="group" aria-label="通信方式">
@@ -110,6 +115,29 @@
       全104 Hzサンプルの連続転送ではありません。</p>
   </section>
 
+  <section class="card" id="quality-card" aria-labelledby="quality-title">
+    <div class="section-head"><h2 id="quality-title">UDPネットワーク品質測定</h2><span class="hint">PINGによる要求・応答試験</span></div>
+    <div class="inline-row quality-controls">
+      <label for="quality-count">試行回数<input id="quality-count" type="number" min="5" max="100" step="1" value="30"></label>
+      <label for="quality-interval">送信間隔 [ms]<input id="quality-interval" type="number" min="50" max="1000" step="50" value="200"></label>
+      <button type="button" class="primary" id="run-quality">測定開始</button>
+      <button type="button" id="export-csv" disabled>CSV保存</button>
+    </div>
+    <div class="monitor-summary quality-summary">
+      <div class="stat"><span>応答なし率</span><strong id="quality-loss">—</strong></div>
+      <div class="stat"><span>RTT 中央値</span><strong id="quality-median">—</strong></div>
+      <div class="stat"><span>RTT P95</span><strong id="quality-p95">—</strong></div>
+      <div class="stat"><span>RTT変動</span><strong id="quality-jitter">—</strong></div>
+    </div>
+    <div class="chart-container"><canvas id="quality-chart" role="img" aria-label="UDP PING往復時間の推移"></canvas></div>
+    <p class="note" id="quality-result">未測定です。30回程度のPING試験から始めてください。</p>
+    <p class="note">応答なし率はPINGへの未応答割合で、厳密な一方向パケット損失率ではありません。RTT変動は、連続する成功試行のRTT差の絶対値の平均です。RSSI測定ではありません。</p>
+  </section>
+
+  <section class="card results" aria-labelledby="result-title"><div class="section-head"><h2 id="result-title">直近の応答</h2><span id="rtt" class="hint">RTT: —</span></div><div class="latest" id="latest-result" role="status">接続確認から始めてください。</div></section>
+  <section class="card" aria-labelledby="logs-title"><div class="section-head"><h2 id="logs-title">通信ログ</h2><div class="inline-row"><button type="button" id="save-log" class="subtle">ログ保存</button><button type="button" id="clear-log" class="subtle">クリア</button></div></div><div class="log" id="log" role="log" aria-live="polite"></div><p class="note">直近300件を表示します。監視PINGはログを増やさず、状態欄だけ更新します。</p></section>
+  </div>
+  <div id="graphs-panel" role="tabpanel" aria-labelledby="graphs-tab" hidden>
   <section class="card" aria-labelledby="imu-graph-title">
     <div class="section-head">
       <h2 id="imu-graph-title">IMU ライブ波形</h2>
@@ -284,28 +312,7 @@
     </figure>
     <p class="hint">横軸は最新サンプルからの経過秒数。受信が途切れた区間は線を結びません。</p>
   </section>
-
-  <section class="card" id="quality-card" aria-labelledby="quality-title">
-    <div class="section-head"><h2 id="quality-title">UDPネットワーク品質測定</h2><span class="hint">PINGによる要求・応答試験</span></div>
-    <div class="inline-row quality-controls">
-      <label for="quality-count">試行回数<input id="quality-count" type="number" min="5" max="100" step="1" value="30"></label>
-      <label for="quality-interval">送信間隔 [ms]<input id="quality-interval" type="number" min="50" max="1000" step="50" value="200"></label>
-      <button type="button" class="primary" id="run-quality">測定開始</button>
-      <button type="button" id="export-csv" disabled>CSV保存</button>
-    </div>
-    <div class="monitor-summary quality-summary">
-      <div class="stat"><span>応答なし率</span><strong id="quality-loss">—</strong></div>
-      <div class="stat"><span>RTT 中央値</span><strong id="quality-median">—</strong></div>
-      <div class="stat"><span>RTT P95</span><strong id="quality-p95">—</strong></div>
-      <div class="stat"><span>RTT変動</span><strong id="quality-jitter">—</strong></div>
-    </div>
-    <div class="chart-container"><canvas id="quality-chart" role="img" aria-label="UDP PING往復時間の推移"></canvas></div>
-    <p class="note" id="quality-result">未測定です。30回程度のPING試験から始めてください。</p>
-    <p class="note">応答なし率はPINGへの未応答割合で、厳密な一方向パケット損失率ではありません。RTT変動は、連続する成功試行のRTT差の絶対値の平均です。RSSI測定ではありません。</p>
-  </section>
-
-  <section class="card results" aria-labelledby="result-title"><div class="section-head"><h2 id="result-title">直近の応答</h2><span id="rtt" class="hint">RTT: —</span></div><div class="latest" id="latest-result" role="status">接続確認から始めてください。</div></section>
-  <section class="card" aria-labelledby="logs-title"><div class="section-head"><h2 id="logs-title">通信ログ</h2><div class="inline-row"><button type="button" id="save-log" class="subtle">ログ保存</button><button type="button" id="clear-log" class="subtle">クリア</button></div></div><div class="log" id="log" role="log" aria-live="polite"></div><p class="note">直近300件を表示します。監視PINGはログを増やさず、状態欄だけ更新します。</p></section>
+  </div>
   <footer>HikoRobo GCS · <a href="/docs" target="_blank" rel="noopener">FastAPI Docs</a> · <a href="/api/health" target="_blank" rel="noopener">Health</a></footer>
 </main>
 </body>

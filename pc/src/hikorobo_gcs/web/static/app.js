@@ -305,6 +305,7 @@ async function runQuality() {
 
 loadSettings();
 window.addEventListener("resize",()=>drawChart(lastQuality));
+$("communication-panel").addEventListener("tabshown", () => drawChart(lastQuality));
 drawChart(null);
 for (const radio of document.querySelectorAll('input[name="transport"]')) radio.addEventListener("change", switchMode);
 // Render stored mode without calling API on load.
@@ -586,3 +587,34 @@ async function updateAttitudeReference(action) {
 
 $("imu-reference-set").addEventListener("click", () => void updateAttitudeReference("set"));
 $("imu-reference-clear").addEventListener("click", () => void updateAttitudeReference("clear"));
+
+const viewTabs = Array.from($("view-tabs").querySelectorAll('[role="tab"]'));
+
+function selectViewTab(selectedTab) {
+  if (selectedTab.getAttribute("aria-selected") === "true") return;
+  for (const tab of viewTabs) {
+    const selected = tab === selectedTab;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    $(tab.getAttribute("aria-controls")).hidden = !selected;
+  }
+  $(selectedTab.getAttribute("aria-controls")).dispatchEvent(new Event("tabshown"));
+}
+
+viewTabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => selectViewTab(tab));
+  tab.addEventListener("keydown", event => {
+    let next;
+    switch (event.key) {
+      case "ArrowLeft": next = (index + viewTabs.length - 1) % viewTabs.length; break;
+      case "ArrowRight": next = (index + 1) % viewTabs.length; break;
+      case "Home": next = 0; break;
+      case "End": next = viewTabs.length - 1; break;
+      default: return;
+    }
+    event.preventDefault();
+    const nextTab = viewTabs[next];
+    selectViewTab(nextTab);
+    nextTab.focus();
+  });
+});

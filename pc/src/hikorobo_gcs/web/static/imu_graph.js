@@ -57,6 +57,7 @@
   function drawAttitude(sample, fields) {
     const width = attitudeView.clientWidth;
     const height = attitudeView.clientHeight;
+    if (!width || !height) return;
     const pixelRatio = window.devicePixelRatio || 1;
     attitudeView.width = Math.round(width * pixelRatio);
     attitudeView.height = Math.round(height * pixelRatio);
@@ -149,6 +150,7 @@
   function draw({canvas, fields, physical, range}) {
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
+    if (!width || !height) return;
     const ratio = window.devicePixelRatio || 1;
     canvas.width = Math.round(width * ratio);
     canvas.height = Math.round(height * ratio);
@@ -355,5 +357,6 @@
     redraw();
   });
   updateAttitudeView();
+  document.getElementById("graphs-panel").addEventListener("tabshown", redraw);
   window.addEventListener("resize", redraw);
 })();

@@ -57,6 +57,23 @@ h1 span {
   margin:0
 }
 
+.view-tabs {
+  display:flex;
+  gap:8px;
+  padding:0 0 8px;
+  border-bottom:1px solid #cbd7e5
+}
+
+.view-tabs button[aria-selected="true"] {
+  background:#1c70b2;
+  border-color:#1c70b2;
+  color:#fff
+}
+
+.view-tabs button[aria-selected="true"]:hover {
+  background:#155b93
+}
+
 .card {
   background:#fff;
   border:1px solid #e0e7f1;
