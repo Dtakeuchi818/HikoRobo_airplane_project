@@ -6,6 +6,9 @@ services:
     environment:
       HOME: /tmp
       IDF_GIT_SAFE_DIR: /project
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /opt/esp/idf/components/openthread/openthread
     volumes:
       - ./firmware/flight_controller:/project
     stdin_open: true

@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>HikoRobo GCS</title>
-  <link rel="stylesheet" href="/static/style.css?v=14">
+  <link rel="stylesheet" href="/static/style.css?v=15">
   <script src="/static/app.js?v=9" defer></script>
   <script src="/static/imu_graph.js?v=15" defer></script>
-  <script src="/static/sbus_graph.js" defer></script>
+  <script src="/static/sbus_graph.js?v=5" defer></script>
 </head>
 <body>
 <main class="container">
@@ -146,9 +146,74 @@
     </div>
     <div class="inline-row">
       <button type="button" class="primary" id="sbus-toggle">ライブ表示開始</button>
-      <span class="hint">生値 0〜2047</span>
+      <span class="hint">生値 0〜2047 / 正規化 −1〜+1</span>
     </div>
-    <div class="sbus-channels" id="sbus-channels"></div>
+    <div class="sbus-channels" id="sbus-channels" aria-label="S.BUS 生値"></div>
+    <h3>変換後の角度指令 <small class="hint">−180°〜+180°</small></h3>
+    <p class="hint" id="sbus-mode-state" role="status">モード未受信</p>
+    <div class="sbus-channels" id="sbus-angles" aria-label="角度指令 −180°〜+180°"></div>
+
+    <details class="sbus-settings">
+      <summary>変換パラメータ設定</summary>
+      <form id="sbus-channel-form">
+        <label>チャンネル <select id="sbus-channel-select"></select></label>
+        <fieldset>
+          <legend>正規化（生値）</legend>
+          <div class="sbus-fields">
+            <label>最小値 <input type="number" name="raw_min" min="0" max="2047" required><button type="button" data-capture="raw_min">現在値を取り込む</button></label>
+            <label>中央値 <input type="number" name="raw_center" min="0" max="2047" required><button type="button" data-capture="raw_center">現在値を取り込む</button></label>
+            <label>最大値 <input type="number" name="raw_max" min="0" max="2047" required><button type="button" data-capture="raw_max">現在値を取り込む</button></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>舵面直接操作モード（°）</legend>
+          <div class="sbus-fields">
+            <label>下限 <input type="number" name="surface_min" min="-180" max="0" step="0.01" required></label>
+            <label>上限 <input type="number" name="surface_max" min="0" max="180" step="0.01" required></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>目標姿勢指令モード（°）</legend>
+          <div class="sbus-fields">
+            <label>下限 <input type="number" name="attitude_min" min="-180" max="0" step="0.01" required></label>
+            <label>上限 <input type="number" name="attitude_max" min="0" max="180" step="0.01" required></label>
+          </div>
+        </fieldset>
+        <p class="hint">上下限をともに 0° にすると、そのモードでこの CH の角度指令を無効にします。</p>
+        <div class="inline-row"><button type="button" data-read>取得</button><button type="submit" class="primary">適用</button><span class="hint" role="status"></span></div>
+      </form>
+    </details>
+
+    <details class="sbus-settings">
+      <summary>モード切り替え設定</summary>
+      <form id="sbus-mode-form">
+        <label>切り替え CH <select name="channel" id="sbus-mode-select"><option value="0">無効</option></select></label>
+        <fieldset>
+          <legend>舵面直接操作モードに入る生値の範囲</legend>
+          <div class="sbus-fields">
+            <label>最小値 <input type="number" name="surface_min" min="0" max="2047" required></label>
+            <label>最大値 <input type="number" name="surface_max" min="0" max="2047" required></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>目標姿勢指令モードに入る生値の範囲</legend>
+          <div class="sbus-fields">
+            <label>最小値 <input type="number" name="attitude_min" min="0" max="2047" required></label>
+            <label>最大値 <input type="number" name="attitude_max" min="0" max="2047" required></label>
+          </div>
+        </fieldset>
+        <div class="inline-row"><button type="button" data-read>取得</button><button type="submit" class="primary">適用</button><span class="hint" role="status"></span></div>
+      </form>
+    </details>
+    <div class="inline-row sbus-settings">
+      <button type="button" id="sbus-save">適用済み設定を XIAO に保存</button>
+      <button type="button" id="sbus-apply-defaults">ビルド時の初期値を適用</button>
+      <span id="sbus-save-state" class="hint" role="status"></span>
+    </div>
+    <div class="inline-row sbus-settings">
+      <button type="button" id="sbus-export">ビルド用 JSON をダウンロード</button>
+      <span id="sbus-export-state" class="hint" role="status"></span>
+    </div>
   </section>
   <section class="card" aria-labelledby="imu-graph-title">
     <div class="section-head">

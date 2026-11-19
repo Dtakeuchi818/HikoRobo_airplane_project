@@ -12,6 +12,12 @@ static command_wifi_status_provider_t s_wifi_provider;
 
 static command_imu_raw_provider_t s_imu_provider;
 static command_imu_control_handler_t s_imu_control_handler;
+static command_imu_control_handler_t s_sbus_handler;
+
+void command_protocol_set_sbus_handler(command_imu_control_handler_t handler)
+{
+    s_sbus_handler = handler;
+}
 
 void command_protocol_set_imu_control_handler(command_imu_control_handler_t handler)
 {
@@ -58,6 +64,8 @@ void command_protocol_handle(const char *command, char *response, size_t respons
         } else {
             snprintf(response, response_size, "ERR IMU_NOT_READY");
         }
+    } else if (strncmp(command, "SBUS ", 5) == 0 && s_sbus_handler != NULL) {
+        s_sbus_handler(command, response, response_size);
     } else if (strcmp(command, "GET_RATE") == 0) {
         snprintf(response, response_size, "OK RATE %d", atomic_load(&s_rate_hz));
     } else if (strcmp(command, "HELP") == 0) {

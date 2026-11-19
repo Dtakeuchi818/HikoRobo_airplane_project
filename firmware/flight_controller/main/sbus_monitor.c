@@ -1,4 +1,5 @@
 #include "sbus_monitor.h"
+#include "sbus_transform.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -42,8 +43,9 @@ static void decode(const uint8_t *frame, sbus_sample_t *sample)
     sample->failsafe = (frame[23] & 0x08) != 0;
 }
 
-static void report_usb(const sbus_sample_t *sample)
+static void report_usb(const sbus_sample_t *sample, const sbus_command_t *command)
 {
+    (void)command;
     char line[256];
     int length;
     if (sample == NULL) {
@@ -87,10 +89,12 @@ static esp_err_t init_uart(void)
     return uart_driver_install(SBUS_UART, 1024, 0, 0, NULL, 0);
 }
 
-static void receive_frames(int64_t period_us, void (*report)(const sbus_sample_t *))
+static void receive_frames(int64_t period_us, bool transform,
+                           void (*report)(const sbus_sample_t *, const sbus_command_t *))
 {
     uint8_t frame[SBUS_FRAME_SIZE];
     sbus_sample_t latest;
+    sbus_command_t command = {0};
     size_t used = 0;
     bool received_frame = false;
     int64_t last_report = esp_timer_get_time();
@@ -107,6 +111,10 @@ static void receive_frames(int64_t period_us, void (*report)(const sbus_sample_t
             }
             if (frame[24] == 0x00 && (frame[23] & 0xf0) == 0) {
                 decode(frame, &latest);
+                if (transform) {
+                    command = sbus_transform_sample(latest.channel, !latest.lost && !latest.failsafe,
+                                                    esp_timer_get_time());
+                }
                 received_frame = true;
                 used = 0;
             } else {
@@ -120,7 +128,10 @@ static void receive_frames(int64_t period_us, void (*report)(const sbus_sample_t
         }
         int64_t now = esp_timer_get_time();
         if (now - last_report >= period_us) {
-            report(received_frame ? &latest : NULL);
+            if (transform && !received_frame) {
+                command = sbus_transform_sample(NULL, false, now);
+            }
+            report(received_frame ? &latest : NULL, &command);
             received_frame = false;
             last_report = now;
         }
@@ -135,12 +146,12 @@ void sbus_monitor_run(void)
     };
     ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb_config));
     ESP_ERROR_CHECK(init_uart());
-    receive_frames(200000, report_usb);
+    receive_frames(200000, false, report_usb);
 }
 
 static struct sockaddr_in s_target;
 
-static void report_udp(const sbus_sample_t *sample)
+static void report_udp(const sbus_sample_t *sample, const sbus_command_t *command)
 {
     static int fd = -1;
     static uint32_t epoch;
@@ -158,11 +169,19 @@ static void report_udp(const sbus_sample_t *sample)
     }
 
     const uint16_t *ch = sample->channel;
-    char packet[64];
-    int size = snprintf(packet, sizeof(packet), "HK1 SBUS %d %d %u %u %u %u %u %u %u %u",
+    char packet[224];
+    int size = snprintf(packet, sizeof(packet), "HK2 SBUS %d %d %u %u %u %u %u %u %u %u",
                         sample->lost, sample->failsafe, (unsigned)ch[0], (unsigned)ch[1],
                         (unsigned)ch[2], (unsigned)ch[3], (unsigned)ch[4], (unsigned)ch[5],
                         (unsigned)ch[6], (unsigned)ch[7]);
+    if (size <= 0 || (size_t)size >= sizeof(packet)) return;
+    size += snprintf(packet + size, sizeof(packet) - (size_t)size, " %d %u",
+                     command->mode, command->active_mask);
+    for (int i = 0; i < SBUS_CONTROL_CHANNELS; ++i) {
+        if ((size_t)size >= sizeof(packet)) return;
+        size += snprintf(packet + size, sizeof(packet) - (size_t)size, " %d %d",
+                         command->normalized[i], command->angles[i]);
+    }
     if (size > 0 && (size_t)size < sizeof(packet)) {
         sendto(fd, packet, (size_t)size, MSG_DONTWAIT,
                (const struct sockaddr *)&s_target, sizeof(s_target));
@@ -172,7 +191,7 @@ static void report_udp(const sbus_sample_t *sample)
 static void sbus_stream_task(void *arg)
 {
     (void)arg;
-    receive_frames(50000, report_udp);
+    receive_frames(50000, true, report_udp);
 }
 
 esp_err_t sbus_stream_start(void)

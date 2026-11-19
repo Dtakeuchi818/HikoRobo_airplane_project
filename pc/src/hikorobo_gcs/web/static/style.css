@@ -441,3 +441,44 @@ footer a {color:#246eaa;}
 .sbus-warning .sbus-bar {
   background:#a64b00;
 }
+
+.sbus-angle-track {
+  position:relative;
+  background:linear-gradient(to bottom,#edf2f8 49%,#c8d5e3 49% 51%,#edf2f8 51%);
+}
+
+.sbus-angle-track .sbus-bar {
+  position:absolute;
+  bottom:50%;
+}
+
+.sbus-settings {
+  margin-top:16px;
+}
+
+.sbus-settings summary {
+  cursor:pointer;
+  font-weight:650;
+}
+
+.sbus-settings fieldset {
+  margin:12px 0;
+  border:1px solid #c8d5e3;
+  border-radius:6px;
+}
+
+.sbus-fields {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(136px,1fr));
+  gap:10px;
+}
+
+.sbus-fields button {
+  margin-top:4px;
+  font-size:.8rem;
+}
+
+.sbus-channels small {
+  display:block;
+  color:#51647b;
+}

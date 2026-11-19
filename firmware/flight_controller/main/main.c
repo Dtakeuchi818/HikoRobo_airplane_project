@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "imu_monitor.h"
 #include "sbus_monitor.h"
+#include "sbus_transform.h"
 #include "sdkconfig.h"
 #include "udp_transport.h"
 #include "usb_transport.h"
@@ -25,6 +26,8 @@ void app_main(void)
 #endif
 
     wifi_manager_start(); // Wi-Fi joins Ubuntu hotspot asynchronously.
+    sbus_transform_load();
+    command_protocol_set_sbus_handler(sbus_transform_handle);
     esp_err_t sbus_err = sbus_stream_start();
     if (sbus_err != ESP_OK) {
         ESP_LOGE("APP", "S.BUS stream start failed: %s", esp_err_to_name(sbus_err));

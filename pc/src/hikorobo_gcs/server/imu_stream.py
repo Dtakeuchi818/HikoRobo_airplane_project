@@ -50,17 +50,32 @@ def parse_imu_packet(packet: bytes) -> dict[str, int | float | str]:
 
 
 def parse_sbus_packet(packet: bytes) -> dict:
-    if len(packet) > 64:
+    if len(packet) > 223:
         raise ValueError("S.BUS packet too long")
-    version, kind, lost, failsafe, *channels = packet.decode("ascii").split()
-    if (version, kind) != ("HK1", "SBUS") or lost not in ("0", "1") or failsafe not in ("0", "1"):
+    version, kind, lost, failsafe, *fields = packet.decode("ascii").split()
+    if version not in ("HK1", "HK2") or kind != "SBUS" or lost not in ("0", "1") or failsafe not in ("0", "1"):
         raise ValueError("invalid S.BUS header or flags")
-    if len(channels) != 8 or any(not re.fullmatch(r"[0-9]{1,4}", ch) for ch in channels):
+    if len(fields) != (8 if version == "HK1" else 26):
+        raise ValueError("invalid S.BUS field count")
+    if any(not re.fullmatch(r"[0-9]{1,4}", ch) for ch in fields[:8]):
         raise ValueError("invalid S.BUS channels")
-    values = list(map(int, channels))
+    values = list(map(int, fields[:8]))
     if any(value > 2047 for value in values):
         raise ValueError("S.BUS channel outside 11-bit range")
-    return {"channels": values, "lost": lost == "1", "failsafe": failsafe == "1"}
+    sample = {"channels": values, "lost": lost == "1", "failsafe": failsafe == "1"}
+    if version == "HK2":
+        if any(not re.fullmatch(r"-?[0-9]{1,5}", field) for field in fields[8:]):
+            raise ValueError("invalid S.BUS conversion field")
+        mode, mask, *converted = map(int, fields[8:])
+        normalized, angles = converted[::2], converted[1::2]
+        if (mode not in (0, 1, 2) or not 0 <= mask <= 255
+                or (mask and (mode == 0 or sample["lost"] or sample["failsafe"]))
+                or any(abs(value) > 1000 for value in normalized)
+                or any(abs(value) > 18000 for value in angles)):
+            raise ValueError("S.BUS conversion field out of range")
+        sample.update(mode=mode, normalized=[value / 1000 for value in normalized],
+                      angles=[value / 100 if mask & (1 << i) else None for i, value in enumerate(angles)])
+    return sample
 
 
 class ImuReceiver(asyncio.DatagramProtocol):
@@ -72,7 +87,7 @@ class ImuReceiver(asyncio.DatagramProtocol):
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
         try:
-            kind = "SBUS" if data.startswith(b"HK1 SBUS ") else "IMU"
+            kind = "SBUS" if data.startswith((b"HK1 SBUS ", b"HK2 SBUS ")) else "IMU"
             sample = parse_sbus_packet(data) if kind == "SBUS" else parse_imu_packet(data)
         except ValueError:
             return

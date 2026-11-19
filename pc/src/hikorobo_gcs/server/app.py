@@ -186,3 +186,34 @@ def update_attitude_reference(action: Literal["set", "clear"], request: TargetRe
     if (action == "clear" and seq != 0) or (action == "set" and not 1 <= seq <= 0xFFFFFFFF):
         raise HTTPException(status_code=502, detail="姿勢基準の連番が不正です")
     return {"reference_seq": seq}
+
+
+class SbusSettingsRequest(TargetRequest):
+    values: list[int] | None = Field(default=None, min_length=5, max_length=7)
+
+
+@app.post("/api/sbus/{section}", tags=["S.BUS"])
+def sbus_settings(section: str, request: SbusSettingsRequest):
+    if request.transport != "udp":
+        raise HTTPException(422, "S.BUS 設定には UDP を選択してください")
+    values = request.values
+    if section == "save" and values is None:
+        execute_command(request, "SBUS SAVE", expected="OK SBUS SAVE")
+        return {"saved": True}
+    if section == "apply-defaults" and values is None:
+        execute_command(request, "SBUS APPLY_DEFAULTS", expected="OK SBUS APPLY_DEFAULTS")
+        return {"applied": True}
+    if section == "mode":
+        suffix, prefix, count = "MODE", "OK SBUS MODE ", 5
+    elif re.fullmatch(r"[1-8]", section):
+        suffix, prefix, count = f"CH {section}", f"OK SBUS CH {section} ", 7
+    else:
+        raise HTTPException(404, "S.BUS 設定項目が不正です")
+    if values is not None and (len(values) != count or any(abs(v) > 18000 for v in values)):
+        raise HTTPException(422, "S.BUS 設定値が不正です")
+    command = f"SBUS GET_{suffix}" if values is None else f"SBUS SET_{suffix} " + " ".join(map(str, values))
+    result = execute_command(request, command, expected=prefix)
+    fields = result["reply"][len(prefix):].split()
+    if len(fields) != count or any(not re.fullmatch(r"-?[0-9]{1,5}", field) for field in fields):
+        raise HTTPException(502, "S.BUS 設定応答の形式が不正です")
+    return {"values": list(map(int, fields))}

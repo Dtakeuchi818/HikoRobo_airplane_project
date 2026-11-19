@@ -16,3 +16,5 @@ void command_protocol_set_imu_raw_provider(command_imu_raw_provider_t provider);
 
 typedef void (*command_imu_control_handler_t)(const char *command, char *reply, size_t capacity);
 void command_protocol_set_imu_control_handler(command_imu_control_handler_t handler);
+
+void command_protocol_set_sbus_handler(command_imu_control_handler_t handler);
