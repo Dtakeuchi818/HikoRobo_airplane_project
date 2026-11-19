@@ -170,7 +170,7 @@ static void report_udp(const sbus_sample_t *sample, const sbus_command_t *comman
 
     const uint16_t *ch = sample->channel;
     char packet[224];
-    int size = snprintf(packet, sizeof(packet), "HK2 SBUS %d %d %u %u %u %u %u %u %u %u",
+    int size = snprintf(packet, sizeof(packet), "HK3 SBUS %d %d %u %u %u %u %u %u %u %u",
                         sample->lost, sample->failsafe, (unsigned)ch[0], (unsigned)ch[1],
                         (unsigned)ch[2], (unsigned)ch[3], (unsigned)ch[4], (unsigned)ch[5],
                         (unsigned)ch[6], (unsigned)ch[7]);
@@ -182,6 +182,9 @@ static void report_udp(const sbus_sample_t *sample, const sbus_command_t *comman
         size += snprintf(packet + size, sizeof(packet) - (size_t)size, " %d %d",
                          command->normalized[i], command->angles[i]);
     }
+    if (size <= 0 || (size_t)size >= sizeof(packet)) return;
+    size += snprintf(packet + size, sizeof(packet) - (size_t)size, " %u %u %u",
+                     sbus_attitude_channels[0], sbus_attitude_channels[1], sbus_attitude_channels[2]);
     if (size > 0 && (size_t)size < sizeof(packet)) {
         sendto(fd, packet, (size_t)size, MSG_DONTWAIT,
                (const struct sockaddr *)&s_target, sizeof(s_target));

@@ -29,8 +29,26 @@
   const channels = makeBars(chart);
   const angles = makeBars(document.getElementById("sbus-angles"), true);
   const modeState = document.getElementById("sbus-mode-state");
+  const attitudeState = document.getElementById("sbus-attitude-state");
+  const attitudeReadings = document.getElementById("sbus-attitude-readings");
+  const drawAttitude = window.createAttitudeView(document.getElementById("sbus-attitude-view"), "目標");
+  const axisLabels = ["ロール", "ピッチ", "ヨー"];
   const captureButtons = [...document.querySelectorAll("[data-capture]")];
   let latest = null;
+
+  function renderAttitude() {
+    const mapping = latest?.attitude_channels;
+    const targets = mapping?.map(ch => latest.mode === 2 ? latest.angles[ch - 1] : null);
+    const valid = targets?.every(Number.isFinite);
+    const message = !latest ? "目標姿勢データ待ち" : !mapping ? "CH 割り当てデータなし"
+      : latest.mode !== 2 ? "目標姿勢指令モード待ち" : !valid ? "割り当て CH の角度指令が無効" : "受信中";
+    if (attitudeState.textContent !== message) attitudeState.textContent = message;
+    attitudeReadings.textContent = axisLabels.map((axis, i) => {
+      const channel = mapping ? ` (CH${mapping[i]})` : "";
+      return `${axis}${channel} ${Number.isFinite(targets?.[i]) ? targets[i].toFixed(2) + "°" : "—"}`;
+    }).join(" / ");
+    drawAttitude(valid ? targets : null);
+  }
 
   function render(sample, message) {
     latest = sample;
@@ -53,6 +71,7 @@
     if (modeState.textContent !== modeLabel) modeState.textContent = modeLabel;
     if (state.textContent !== message) state.textContent = message;
     chart.classList.toggle("sbus-warning", Boolean(sample?.failsafe || sample?.lost));
+    renderAttitude();
   }
 
   function stop(message) {
@@ -265,6 +284,7 @@
       const [switch_channel, surfaceMin, surfaceMax, attitudeMin, attitudeMax] =
         await readSection("mode", "モード設定");
       const config = {
+        attitude_axes: {},
         mode: {
           switch_channel,
           surface_raw: [surfaceMin, surfaceMax],
@@ -272,6 +292,8 @@
         },
         channels: {},
       };
+      const {values: [roll, pitch, yaw]} = await settingsRequest("axes", undefined, target);
+      config.attitude_axes = {roll, pitch, yaw};
       for (let ch = 1; ch <= 8; ch++) {
         const values = await readSection(String(ch), `CH${ch}`);
         config.channels[`CH${ch}`] = {
@@ -294,5 +316,7 @@
     }
   });
 
+  document.getElementById("graphs-panel").addEventListener("tabshown", renderAttitude);
+  window.addEventListener("resize", renderAttitude);
   render(null, "停止中");
 })();

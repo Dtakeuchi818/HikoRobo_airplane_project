@@ -205,6 +205,8 @@ def sbus_settings(section: str, request: SbusSettingsRequest):
         return {"applied": True}
     if section == "mode":
         suffix, prefix, count = "MODE", "OK SBUS MODE ", 5
+    elif section == "axes" and values is None:
+        suffix, prefix, count = "AXES", "OK SBUS AXES ", 3
     elif re.fullmatch(r"[1-8]", section):
         suffix, prefix, count = f"CH {section}", f"OK SBUS CH {section} ", 7
     else:

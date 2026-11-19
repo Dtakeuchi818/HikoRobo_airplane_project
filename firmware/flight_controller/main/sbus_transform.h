@@ -5,6 +5,9 @@
 #include <stdint.h>
 
 #define SBUS_CONTROL_CHANNELS 8
+#define SBUS_ATTITUDE_AXES 3
+
+extern const unsigned sbus_attitude_channels[SBUS_ATTITUDE_AXES];
 
 typedef struct {
     int mode; // 0: inactive, 1: surface, 2: attitude

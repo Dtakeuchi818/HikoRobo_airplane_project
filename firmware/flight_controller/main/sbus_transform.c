@@ -36,6 +36,9 @@ static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
 static const settings_t s_defaults =
 #include "sbus_defaults.inc"
 ;
+const unsigned sbus_attitude_channels[SBUS_ATTITUDE_AXES] =
+#include "sbus_defaults.inc.axes"
+;
 static settings_t s_settings;
 static unsigned s_mode_revision;
 
@@ -89,6 +92,11 @@ static bool parse_ints(const char *text, int *values, size_t count)
 void sbus_transform_handle(const char *command, char *reply, size_t capacity)
 {
     int v[8];
+    if (strcmp(command, "SBUS GET_AXES") == 0) {
+        snprintf(reply, capacity, "OK SBUS AXES %u %u %u", sbus_attitude_channels[0],
+                 sbus_attitude_channels[1], sbus_attitude_channels[2]);
+        return;
+    }
     if (strcmp(command, "SBUS APPLY_DEFAULTS") == 0) {
         portENTER_CRITICAL(&s_lock);
         s_settings = s_defaults;

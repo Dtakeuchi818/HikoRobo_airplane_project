@@ -7,8 +7,9 @@
   <title>HikoRobo GCS</title>
   <link rel="stylesheet" href="/static/style.css?v=15">
   <script src="/static/app.js?v=9" defer></script>
-  <script src="/static/imu_graph.js?v=15" defer></script>
-  <script src="/static/sbus_graph.js?v=5" defer></script>
+  <script src="/static/attitude_view.js" defer></script>
+  <script src="/static/imu_graph.js?v=16" defer></script>
+  <script src="/static/sbus_graph.js?v=6" defer></script>
 </head>
 <body>
 <main class="container">
@@ -152,6 +153,14 @@
     <h3>変換後の角度指令 <small class="hint">−180°〜+180°</small></h3>
     <p class="hint" id="sbus-mode-state" role="status">モード未受信</p>
     <div class="sbus-channels" id="sbus-angles" aria-label="角度指令 −180°〜+180°"></div>
+    <figure class="imu-graph imu-attitude-view">
+      <figcaption>S.BUS の3D目標姿勢</figcaption>
+      <p class="hint" id="sbus-attitude-readings">ロール — / ピッチ — / ヨー —</p>
+      <span class="hint" id="sbus-attitude-state" role="status">目標姿勢データ待ち</span>
+      <canvas id="sbus-attitude-view" role="img" aria-label="S.BUS の目標姿勢と基準座標軸"
+              aria-describedby="sbus-attitude-hint"></canvas>
+      <p class="hint" id="sbus-attitude-hint">ドラッグで視点を回転できます。</p>
+    </figure>
 
     <details class="sbus-settings">
       <summary>変換パラメータ設定</summary>
