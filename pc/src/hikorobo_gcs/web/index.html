@@ -174,14 +174,6 @@
       <form id="sbus-channel-form">
         <label>チャンネル <select id="sbus-channel-select"></select></label>
         <fieldset>
-          <legend>正規化（生値）</legend>
-          <div class="sbus-fields">
-            <label>最小値 <input type="number" name="raw_min" min="0" max="2047" required><button type="button" data-capture="raw_min">現在値を取り込む</button></label>
-            <label>中央値 <input type="number" name="raw_center" min="0" max="2047" required><button type="button" data-capture="raw_center">現在値を取り込む</button></label>
-            <label>最大値 <input type="number" name="raw_max" min="0" max="2047" required><button type="button" data-capture="raw_max">現在値を取り込む</button></label>
-          </div>
-        </fieldset>
-        <fieldset>
           <legend>舵面直接操作モード（°）</legend>
           <div class="sbus-fields">
             <label>下限 <input type="number" name="surface_min" min="-180" max="0" step="0.01" required></label>

@@ -189,7 +189,7 @@ def update_attitude_reference(action: Literal["set", "clear"], request: TargetRe
 
 
 class SbusSettingsRequest(TargetRequest):
-    values: list[int] | None = Field(default=None, min_length=5, max_length=7)
+    values: list[int] | None = Field(default=None, min_length=4, max_length=5)
 
 
 @app.post("/api/sbus/{section}", tags=["S.BUS"])
@@ -208,7 +208,7 @@ def sbus_settings(section: str, request: SbusSettingsRequest):
     elif section == "axes" and values is None:
         suffix, prefix, count = "AXES", "OK SBUS AXES ", 3
     elif re.fullmatch(r"[1-8]", section):
-        suffix, prefix, count = f"CH {section}", f"OK SBUS CH {section} ", 7
+        suffix, prefix, count = f"CH {section}", f"OK SBUS CH {section} ", 4
     else:
         raise HTTPException(404, "S.BUS 設定項目が不正です")
     if values is not None and (len(values) != count or any(abs(v) > 18000 for v in values)):

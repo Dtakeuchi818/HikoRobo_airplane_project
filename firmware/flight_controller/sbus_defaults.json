@@ -6,13 +6,13 @@
     "attitude_raw": [1025, 2047]
   },
   "channels": {
-    "CH1": {"raw": [368, 1020, 1680], "surface_deg": [-90, 90], "attitude_deg": [-90, 90]},
-    "CH2": {"raw": [368, 992, 1680], "surface_deg": [-90, 90], "attitude_deg": [-90, 90]},
-    "CH3": {"raw": [368, 992, 1680], "surface_deg": [0, 0], "attitude_deg": [0, 0]},
-    "CH4": {"raw": [368, 1030, 1680], "surface_deg": [-90, 90], "attitude_deg": [-90, 90]},
-    "CH5": {"raw": [0, 1024, 2047], "surface_deg": [0, 0], "attitude_deg": [0, 0]},
-    "CH6": {"raw": [0, 1024, 2047], "surface_deg": [0, 0], "attitude_deg": [0, 0]},
-    "CH7": {"raw": [368, 1020, 1680], "surface_deg": [-90, 90], "attitude_deg": [0, 0]},
-    "CH8": {"raw": [0, 1024, 2047], "surface_deg": [0, 0], "attitude_deg": [0, 0]}
+    "CH1": {"surface_deg": [-90, 90], "attitude_deg": [-90, 90]},
+    "CH2": {"surface_deg": [-90, 90], "attitude_deg": [-90, 90]},
+    "CH3": {"surface_deg": [0, 0], "attitude_deg": [0, 0]},
+    "CH4": {"surface_deg": [-90, 90], "attitude_deg": [-90, 90]},
+    "CH5": {"surface_deg": [0, 0], "attitude_deg": [0, 0]},
+    "CH6": {"surface_deg": [0, 0], "attitude_deg": [0, 0]},
+    "CH7": {"surface_deg": [-90, 90], "attitude_deg": [0, 0]},
+    "CH8": {"surface_deg": [0, 0], "attitude_deg": [0, 0]}
   }
 }

@@ -9,7 +9,6 @@
 #include "nvs.h"
 
 typedef struct {
-    int min, center, max;
     int surface_min, surface_max;
     int attitude_min, attitude_max;
 } channel_config_t;
@@ -30,7 +29,19 @@ typedef struct {
     settings_t settings;
 } saved_settings_t;
 
+// config_v2 stored three normalization values ahead of each channel's angles.
+typedef struct {
+    mode_config_t mode;
+    struct {
+        int normalization[3];
+        channel_config_t angles;
+    } channel[SBUS_CONTROL_CHANNELS];
+} legacy_settings_t;
+
 #define MODE_DWELL_US 100000
+#define SBUS_RAW_MIN 0
+#define SBUS_RAW_CENTER 1024
+#define SBUS_RAW_MAX 2047
 
 static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
 static const settings_t s_defaults =
@@ -44,8 +55,7 @@ static unsigned s_mode_revision;
 
 static bool valid_channel(channel_config_t c)
 {
-    return c.min >= 0 && c.min < c.center && c.center < c.max && c.max <= 2047
-        && c.surface_min >= -18000 && c.surface_min <= 0 && c.surface_max >= 0 && c.surface_max <= 18000
+    return c.surface_min >= -18000 && c.surface_min <= 0 && c.surface_max >= 0 && c.surface_max <= 18000
         && c.attitude_min >= -18000 && c.attitude_min <= 0 && c.attitude_max >= 0 && c.attitude_max <= 18000;
 }
 
@@ -57,16 +67,40 @@ static bool valid_mode(mode_config_t m)
         && (m.surface_max < m.attitude_min || m.attitude_max < m.surface_min);
 }
 
+static esp_err_t read_saved_settings(nvs_handle_t handle, saved_settings_t *saved)
+{
+    size_t size = sizeof(*saved);
+    esp_err_t err = nvs_get_blob(handle, "config_v3", saved, &size);
+    if (err != ESP_ERR_NVS_NOT_FOUND) {
+        return err == ESP_OK && size != sizeof(*saved) ? ESP_ERR_INVALID_SIZE : err;
+    }
+
+    struct {
+        legacy_settings_t build_defaults;
+        legacy_settings_t settings;
+    } legacy;
+    size = sizeof(legacy);
+    err = nvs_get_blob(handle, "config_v2", &legacy, &size);
+    if (err != ESP_OK) return err;
+    if (size != sizeof(legacy)) return ESP_ERR_INVALID_SIZE;
+    saved->build_defaults.mode = legacy.build_defaults.mode;
+    saved->settings.mode = legacy.settings.mode;
+    for (int i = 0; i < SBUS_CONTROL_CHANNELS; ++i) {
+        saved->build_defaults.channel[i] = legacy.build_defaults.channel[i].angles;
+        saved->settings.channel[i] = legacy.settings.channel[i].angles;
+    }
+    return ESP_OK;
+}
+
 void sbus_transform_load(void)
 {
     s_settings = s_defaults;
     nvs_handle_t handle;
     if (nvs_open("sbus", NVS_READONLY, &handle) != ESP_OK) return;
     saved_settings_t saved;
-    size_t size = sizeof(saved);
-    esp_err_t err = nvs_get_blob(handle, "config_v2", &saved, &size);
+    esp_err_t err = read_saved_settings(handle, &saved);
     nvs_close(handle);
-    if (err != ESP_OK || size != sizeof(saved)
+    if (err != ESP_OK
         || memcmp(&saved.build_defaults, &s_defaults, sizeof(s_defaults)) != 0
         || !valid_mode(saved.settings.mode)) return;
     for (int i = 0; i < SBUS_CONTROL_CHANNELS; ++i) {
@@ -91,7 +125,7 @@ static bool parse_ints(const char *text, int *values, size_t count)
 
 void sbus_transform_handle(const char *command, char *reply, size_t capacity)
 {
-    int v[8];
+    int v[5];
     if (strcmp(command, "SBUS GET_AXES") == 0) {
         snprintf(reply, capacity, "OK SBUS AXES %u %u %u", sbus_attitude_channels[0],
                  sbus_attitude_channels[1], sbus_attitude_channels[2]);
@@ -113,7 +147,7 @@ void sbus_transform_handle(const char *command, char *reply, size_t capacity)
         nvs_handle_t handle;
         esp_err_t err = nvs_open("sbus", NVS_READWRITE, &handle);
         if (err == ESP_OK) {
-            err = nvs_set_blob(handle, "config_v2", &snapshot, sizeof(snapshot));
+            err = nvs_set_blob(handle, "config_v3", &snapshot, sizeof(snapshot));
             if (err == ESP_OK) err = nvs_commit(handle);
             nvs_close(handle);
         }
@@ -144,11 +178,11 @@ void sbus_transform_handle(const char *command, char *reply, size_t capacity)
 
     bool set_channel = strncmp(command, "SBUS SET_CH ", 12) == 0;
     if ((set_channel || strncmp(command, "SBUS GET_CH ", 12) == 0)
-        && parse_ints(command + 11, v, set_channel ? 8 : 1)
+        && parse_ints(command + 11, v, set_channel ? 5 : 1)
         && v[0] >= 1 && v[0] <= SBUS_CONTROL_CHANNELS) {
         int index = v[0] - 1;
         if (set_channel) {
-            channel_config_t c = {v[1], v[2], v[3], v[4], v[5], v[6], v[7]};
+            channel_config_t c = {v[1], v[2], v[3], v[4]};
             if (!valid_channel(c)) goto bad_argument;
             portENTER_CRITICAL(&s_lock);
             s_settings.channel[index] = c;
@@ -157,8 +191,8 @@ void sbus_transform_handle(const char *command, char *reply, size_t capacity)
         portENTER_CRITICAL(&s_lock);
         channel_config_t c = s_settings.channel[index];
         portEXIT_CRITICAL(&s_lock);
-        snprintf(reply, capacity, "OK SBUS CH %d %d %d %d %d %d %d %d",
-                 v[0], c.min, c.center, c.max, c.surface_min, c.surface_max, c.attitude_min, c.attitude_max);
+        snprintf(reply, capacity, "OK SBUS CH %d %d %d %d %d",
+                 v[0], c.surface_min, c.surface_max, c.attitude_min, c.attitude_max);
         return;
     }
 
@@ -195,8 +229,8 @@ sbus_command_t sbus_transform_sample(const uint16_t *raw, bool usable, int64_t n
 
     for (int i = 0; i < SBUS_CONTROL_CHANNELS; ++i) {
         const channel_config_t c = settings.channel[i];
-        int delta = raw[i] - c.center;
-        int span = delta >= 0 ? c.max - c.center : c.center - c.min;
+        int delta = raw[i] - SBUS_RAW_CENTER;
+        int span = delta >= 0 ? SBUS_RAW_MAX - SBUS_RAW_CENTER : SBUS_RAW_CENTER - SBUS_RAW_MIN;
         if (delta > span) delta = span;
         if (delta < -span) delta = -span;
         result.normalized[i] = delta * 1000 / span;

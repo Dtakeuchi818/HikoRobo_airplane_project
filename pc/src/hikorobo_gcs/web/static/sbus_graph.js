@@ -34,7 +34,6 @@
   const attitudeReadings = document.getElementById("sbus-attitude-readings");
   const drawAttitude = window.createAttitudeView(document.getElementById("sbus-attitude-view"), "目標");
   const axisLabels = ["ロール", "ピッチ", "ヨー"];
-  const captureButtons = [...document.querySelectorAll("[data-capture]")];
   let latest = null;
 
   function renderAttitude() {
@@ -53,7 +52,6 @@
 
   function render(sample, message) {
     latest = sample;
-    captureButtons.forEach(button => { button.disabled = !sample || sample.has_frame === false; });
     servoPulses.forEach((output, i) => {
       const width = sample?.servo_pwm_us?.[i];
       const text = Number.isInteger(width) ? `${width} µs` : "—";
@@ -161,8 +159,6 @@
           !(surfaceMax < attitudeMin || attitudeMax < surfaceMin)) {
         return "範囲の順序と重複を確認してください";
       }
-    } else if (!(values[0] < values[1] && values[1] < values[2])) {
-      return "最小値 < 中央値 < 最大値 にしてください";
     }
     return "";
   }
@@ -229,15 +225,10 @@
   }
 
   const channelSettings = bindSettings(document.getElementById("sbus-channel-form"), () => channelSelect.value,
-    ["raw_min", "raw_center", "raw_max", "surface_min", "surface_max", "attitude_min", "attitude_max"], 3);
+    ["surface_min", "surface_max", "attitude_min", "attitude_max"], 0);
   channelSelect.addEventListener("change", channelSettings.clear);
   const modeSettings = bindSettings(document.getElementById("sbus-mode-form"), () => "mode",
     ["channel", "surface_min", "surface_max", "attitude_min", "attitude_max"], Infinity);
-  captureButtons.forEach(button => {
-    button.addEventListener("click", () => {
-      if (latest) button.form.elements.namedItem(button.dataset.capture).value = latest.channels[Number(channelSelect.value) - 1];
-    });
-  });
   const save = document.getElementById("sbus-save");
   const applyDefaults = document.getElementById("sbus-apply-defaults");
   const saveState = document.getElementById("sbus-save-state");
@@ -304,9 +295,8 @@
       for (let ch = 1; ch <= 8; ch++) {
         const values = await readSection(String(ch), `CH${ch}`);
         config.channels[`CH${ch}`] = {
-          raw: values.slice(0, 3),
-          surface_deg: values.slice(3, 5).map(value => value / 100),
-          attitude_deg: values.slice(5, 7).map(value => value / 100),
+          surface_deg: values.slice(0, 2).map(value => value / 100),
+          attitude_deg: values.slice(2, 4).map(value => value / 100),
         };
       }
       const file = new Blob([JSON.stringify(config, null, 2) + "\n"], {type: "application/json"});
