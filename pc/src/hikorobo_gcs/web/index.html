@@ -9,7 +9,7 @@
   <script src="/static/app.js?v=9" defer></script>
   <script src="/static/attitude_view.js" defer></script>
   <script src="/static/imu_graph.js?v=16" defer></script>
-  <script src="/static/sbus_graph.js?v=6" defer></script>
+  <script src="/static/sbus_graph.js?v=7" defer></script>
 </head>
 <body>
 <main class="container">
@@ -152,6 +152,13 @@
     <div class="sbus-channels" id="sbus-channels" aria-label="S.BUS 生値"></div>
     <h3>変換後の角度指令 <small class="hint">−180°〜+180°</small></h3>
     <p class="hint" id="sbus-mode-state" role="status">モード未受信</p>
+    <div class="inline-row" aria-label="サーボのPWMパルス幅">
+      <strong>サーボPWM</strong>
+      <span>D0 (CH1) <output data-servo-pwm>—</output></span>
+      <span>D1 (CH2) <output data-servo-pwm>—</output></span>
+      <span>D3 (CH4) <output data-servo-pwm>—</output></span>
+      <span>D8 (CH7) <output data-servo-pwm>—</output></span>
+    </div>
     <div class="sbus-channels" id="sbus-angles" aria-label="角度指令 −180°〜+180°"></div>
     <figure class="imu-graph imu-attitude-view">
       <figcaption>S.BUS の3D目標姿勢</figcaption>

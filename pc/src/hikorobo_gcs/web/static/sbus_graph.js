@@ -29,6 +29,7 @@
   const channels = makeBars(chart);
   const angles = makeBars(document.getElementById("sbus-angles"), true);
   const modeState = document.getElementById("sbus-mode-state");
+  const servoPulses = document.querySelectorAll("[data-servo-pwm]");
   const attitudeState = document.getElementById("sbus-attitude-state");
   const attitudeReadings = document.getElementById("sbus-attitude-readings");
   const drawAttitude = window.createAttitudeView(document.getElementById("sbus-attitude-view"), "目標");
@@ -52,7 +53,12 @@
 
   function render(sample, message) {
     latest = sample;
-    captureButtons.forEach(button => { button.disabled = !sample; });
+    captureButtons.forEach(button => { button.disabled = !sample || sample.has_frame === false; });
+    servoPulses.forEach((output, i) => {
+      const width = sample?.servo_pwm_us?.[i];
+      const text = Number.isInteger(width) ? `${width} µs` : "—";
+      if (output.value !== text) output.value = text;
+    });
     channels.forEach(({bar, value, normalized}, i) => {
       const raw = sample?.channels[i];
       bar.style.height = `${(raw ?? 0) / 2047 * 100}%`;
@@ -107,7 +113,8 @@
     current.addEventListener("message", event => {
       if (socket !== current) return;
       const sample = JSON.parse(event.data).samples.at(-1);
-      const message = sample.failsafe ? "フェイルセーフ" : sample.lost ? "フレーム欠落" : "受信中";
+      const message = sample.has_frame === false ? "S.BUSフレーム待ち"
+        : sample.failsafe ? "フェイルセーフ" : sample.lost ? "フレーム欠落" : "受信中";
       render(sample, message);
       clearTimeout(idleTimer);
       idleTimer = setTimeout(() => render(null, "S.BUSデータの受信が停止"), 1000);

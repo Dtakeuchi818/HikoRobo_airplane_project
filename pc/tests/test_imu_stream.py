@@ -28,6 +28,28 @@ def test_sbus_udp_to_websocket(monkeypatch):
         imu_stream.parse_sbus_packet(b"HK1 SBUS 1 0 0 250 500 750 1000 1250 1500 2048")
 
 
+def test_servo_pwm_udp_to_websocket_without_sbus_frame(monkeypatch):
+    monkeypatch.setattr(imu_stream, "IMU_STREAM_PORT", 0)
+    packet = b"HK4 SBUS 0 0" + b" 0" * 26 + b" 1 2 4 0 1500 1500 1500 1500"
+    with TestClient(app) as client:
+        port = app.state.imu_receiver.transport.get_extra_info("sockname")[1]
+        with client.websocket_connect("/ws/sbus?host=127.0.0.1") as websocket:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
+                sender.sendto(packet, ("127.0.0.1", port))
+            sample = websocket.receive_json()["samples"][0]
+    assert sample["servo_pwm_us"] == [1500] * 4
+    assert sample["has_frame"] is False
+    assert sample["channels"] == []
+
+    active = b"HK4 SBUS 0 0" + b" 1000" * 8 + b" 1 1 1000 1000" + b" 0" * 14
+    active += b" 1 2 4 1 1611 1500 1500 1500"
+    sample = imu_stream.parse_sbus_packet(active)
+    assert sample["angles"][0] == 10
+    assert sample["servo_pwm_us"] == [1611, 1500, 1500, 1500]
+    with pytest.raises(ValueError, match="servo pulse outside range"):
+        imu_stream.parse_sbus_packet(active.replace(b"1611", b"2001"))
+
+
 @pytest.mark.parametrize("version", [b"HK1", b"HK2", b"HK3", b"HK4"])
 def test_imu_udp_to_websocket(monkeypatch, version):
     raw = b" IMU 14d1c6b9 42 4100000 -12 5 16384 3 -2 11 0 0x03"

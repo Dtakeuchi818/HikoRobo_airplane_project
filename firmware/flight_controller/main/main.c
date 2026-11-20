@@ -5,6 +5,7 @@
 #include "sbus_monitor.h"
 #include "sbus_transform.h"
 #include "sdkconfig.h"
+#include "servo_test.h"
 #include "udp_transport.h"
 #include "usb_transport.h"
 #include "wifi_manager.h"
@@ -20,6 +21,10 @@ static void usb_task(void *arg)
 
 void app_main(void)
 {
+#ifdef CONFIG_HIKOROBO_SERVO_TEST
+    servo_test_run();
+    return;
+#endif
 #ifdef CONFIG_HIKOROBO_SBUS_MONITOR
     sbus_monitor_run();
     return;

@@ -99,6 +99,39 @@ docker compose -f compose.yaml -f compose.usb.yaml run --rm idf \
 
 The firmware starts USB command processing and tries to connect to the Ubuntu hotspot automatically. On IP acquisition, it starts a UDP server on UDP port 5005.
 
+### Four-servo PWM bench test
+
+In `idf.py menuconfig`, enable **HikoRobo servo test → Boot into the USB servo test**, then build and flash as above. The test mode starts all four outputs at 1500 µs and generates a 50 Hz PWM signal on each pin.
+
+| USB servo number | XIAO pin | GPIO | Planned S.BUS channel |
+| --- | --- | --- | --- |
+| 1 | D0 | 1 | CH1 |
+| 2 | D1 | 2 | CH2 |
+| 3 | D3 | 4 | CH4 |
+| 4 | D8 | 7 | CH7 |
+
+Disconnect the mechanical linkages for this test. Power the servos from a suitable external BEC and connect its ground to the XIAO ground. Use servos that accept the XIAO's 3.3 V signal and the requested pulse widths.
+
+Open a USB serial terminal (for example, `python3 -m serial.tools.miniterm /dev/ttyACM0 115200 --echo` with pyserial installed). Send one command per line.
+
+```text
+SET 0 1500
+SET 1 1400
+SET 1 1600
+```
+
+`SET <servo> <pulse_us>` accepts 1000–2000 µs. Servo number `0` applies the same width to all four. A successful command returns `OK SET <servo> <pulse_us>`. Each output holds its last setting so the shaft angle can be measured. For calibration, measure each servo's shaft angle on both sides of 1500 µs and divide the pulse-width difference by the measured angle difference to obtain µs/°. Increase the excursion gradually when checking the ends of travel.
+
+Disable the menuconfig option and rebuild and flash to return to normal firmware operation.
+
+### Direct-mode servo control
+
+In normal operation, the PWM outputs use the direct-mode angle commands from the S.BUS channels in the table above. S.BUS is received on D7 (GPIO44), and the PWM works with or without a configured UDP telemetry destination.
+
+The firmware treats the command as a servo shaft angle relative to neutral, assuming increasing pulse width is positive and 1000–2000 µs spans 90°. Commands of −10°, 0°, and +10° produce approximately 1389, 1500, and 1611 µs. The output is limited to 1000–2000 µs.
+
+Each output starts at 1500 µs and returns there when its channel is inactive, direct mode is exited, the receiver reports signal loss or failsafe, or a 100 ms S.BUS frame timeout is detected.
+
 ## 6. Setup Python (runs directly on Ubuntu)
 
 ```bash

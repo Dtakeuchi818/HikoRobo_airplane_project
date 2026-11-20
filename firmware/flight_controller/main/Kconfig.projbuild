@@ -37,3 +37,15 @@ menu "HikoRobo IMU telemetry"
             An empty value disables IMU and S.BUS streaming.
 
 endmenu
+
+menu "HikoRobo servo test"
+
+    config HIKOROBO_SERVO_TEST
+        bool "Boot into the USB servo test"
+        default n
+        help
+            Generate 50 Hz servo pulses on XIAO D0, D1, D3 and D8.
+            This mode takes precedence over the S.BUS USB monitor and
+            starts a dedicated USB pulse-width command interface.
+
+endmenu

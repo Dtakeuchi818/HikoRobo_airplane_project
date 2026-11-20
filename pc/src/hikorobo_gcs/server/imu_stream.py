@@ -50,10 +50,10 @@ def parse_imu_packet(packet: bytes) -> dict[str, int | float | str]:
 
 
 def parse_sbus_packet(packet: bytes) -> dict:
-    if len(packet) > 223:
+    if len(packet) > 255:
         raise ValueError("S.BUS packet too long")
     version, kind, lost, failsafe, *fields = packet.decode("ascii").split()
-    counts = {"HK1": 8, "HK2": 26, "HK3": 29}
+    counts = {"HK1": 8, "HK2": 26, "HK3": 29, "HK4": 34}
     if version not in counts or kind != "SBUS" or lost not in ("0", "1") or failsafe not in ("0", "1"):
         raise ValueError("invalid S.BUS header or flags")
     if len(fields) != counts[version]:
@@ -76,11 +76,20 @@ def parse_sbus_packet(packet: bytes) -> dict:
             raise ValueError("S.BUS conversion field out of range")
         sample.update(mode=mode, normalized=[value / 1000 for value in normalized],
                       angles=[value / 100 if mask & (1 << i) else None for i, value in enumerate(angles)])
-    if version == "HK3":
-        axes = list(map(int, fields[26:]))
+    if version in ("HK3", "HK4"):
+        axes = list(map(int, fields[26:29]))
         if len(set(axes)) != 3 or any(not 1 <= ch <= 8 for ch in axes):
             raise ValueError("invalid S.BUS attitude channels")
         sample["attitude_channels"] = axes
+    if version == "HK4":
+        if fields[29] not in ("0", "1"):
+            raise ValueError("invalid S.BUS frame flag")
+        pwm = list(map(int, fields[30:34]))
+        if any(not 1000 <= width <= 2000 for width in pwm):
+            raise ValueError("S.BUS servo pulse outside range")
+        sample.update(has_frame=fields[29] == "1", servo_pwm_us=pwm)
+        if not sample["has_frame"]:
+            sample.update(channels=[], normalized=[], angles=[], mode=0, lost=False, failsafe=False)
     return sample
 
 
@@ -93,7 +102,7 @@ class ImuReceiver(asyncio.DatagramProtocol):
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
         try:
-            kind = "SBUS" if data.startswith((b"HK1 SBUS ", b"HK2 SBUS ", b"HK3 SBUS ")) else "IMU"
+            kind = "SBUS" if data.startswith((b"HK1 SBUS ", b"HK2 SBUS ", b"HK3 SBUS ", b"HK4 SBUS ")) else "IMU"
             sample = parse_sbus_packet(data) if kind == "SBUS" else parse_imu_packet(data)
         except ValueError:
             return
